@@ -4,6 +4,20 @@
 - **删除节点配置仅支持Version：1.0及之后的版本。**
 - **其它优化与修复。**
 
+# **安装**
+- **Debian&&Ubuntu使用以下命令安装依赖**
+```
+apt update && apt -y install curl wget tar socat jq git openssl uuid-runtime build-essential zlib1g-dev libssl-dev libevent-dev dnsutils cron
+```
+- **CentOS使用以下命令安装依赖**
+```
+yum update && yum -y install curl wget tar socat jq git openssl util-linux gcc-c++ zlib-devel openssl-devel libevent-devel bind-utils cronie
+```
+- **使用以下命令运行脚本**
+```
+wget -N -O /root/singbox.sh https://raw.githubusercontent.com/TinrLin/sing-box/main/Install.sh && chmod +x /root/singbox.sh && ln -sf /root/singbox.sh /usr/local/bin/singbox && bash /root/singbox.sh
+```
+
 # **说明**
 - **脚本使用sing-box、Juicity内核。**
 - **脚本支持IPV6单栈机。**
@@ -18,19 +32,6 @@
 - **电脑端使用方法：下载生成的win_client.json文件====>>V2rayN客户端添加自定义配置服务器====>>地址加载生成的win_client.json文件====>>Core类型选sing_box====>>Socks端口1080。**
 - **手机端使用方法：下载生成的phone_client.json文件====>>手机下载sing-box官方客户端====>>Profiles点击New profile====>>name自己命名====>>Source选择Import====>>点击Import File====>>选择下载的phone_client.json文件。**
 
-# **安装**
-- **Debian&&Ubuntu使用以下命令安装依赖**
-```
-apt update && apt -y install curl wget tar socat jq git openssl uuid-runtime build-essential zlib1g-dev libssl-dev libevent-dev dnsutils cron
-```
-- **CentOS使用以下命令安装依赖**
-```
-yum update && yum -y install curl wget tar socat jq git openssl util-linux gcc-c++ zlib-devel openssl-devel libevent-devel bind-utils cronie
-```
-- **使用以下命令运行脚本**
-```
-wget -N -O /root/singbox.sh https://raw.githubusercontent.com/TinrLin/sing-box/main/Install.sh && chmod +x /root/singbox.sh && ln -sf /root/singbox.sh /usr/local/bin/singbox && bash /root/singbox.sh
-```
 # **Hysteria端口跳跃**
 ```
 # Debian&&Ubuntu
