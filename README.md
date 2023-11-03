@@ -27,7 +27,7 @@ wget -N -O /root/singbox.sh https://raw.githubusercontent.com/TinrLin/sing-box/m
 ```
 
 # **使用方法**
-- **下载/usr/local/etc/sing-box/clash.yaml文件导入Clash客户端即可使用，需要配合 Meta 内核。**
+- **Clash客户端配置文件位于/usr/local/etc/sing-box/clash.yaml，下载后加载到 Clash 客户端即可使用，需要配合 Meta 内核。**
 - **sing-box电脑端配置文件位于/usr/local/etc/sing-box/win_client.json，下载后加载到 V2rayN、SFM 客户端即可使用。**
 - **sing-box手机端配置文件位于/usr/local/etc/sing-box/phone_client.json，下载后加载到 SFA、SFI 客户端即可使用。**
 
