@@ -659,18 +659,29 @@ WantedBy=multi-user.target'
 }
 
 function set_listen_port() {
+    local config_file="/usr/local/etc/sing-box/config.json"
+    current_listen_ports=($(jq -r '.inbounds[] | select(.listen_port != null) | .listen_port' "$config_file"))
+    
     while true; do
         read -p "请输入监听端口 (默认443): " new_listen_port
         new_listen_port=${new_listen_port:-443}
 
         if [[ $new_listen_port =~ ^[1-9][0-9]{0,4}$ && $new_listen_port -le 65535 ]]; then
+            for port in "${current_listen_ports[@]}"; do
+                if [ "$new_listen_port" == "$port" ]; then
+                    echo -e "${RED}错误：端口 $new_listen_port 已经使用，请重新输入！${NC}" >&2
+                    continue 2
+                fi
+            done
+
             echo "监听端口：$new_listen_port"
             break
         else
-            echo -e "${RED}错误：端口范围1-65535，请重新输入！${NC}" >&2
+            echo -e "${RED}错误：端口范围 1-65535，请重新输入！${NC}" >&2
         fi
-    done 
-    listen_port="$new_listen_port"   
+    done
+
+    listen_port="$new_listen_port"
 }
 
 function set_user_name() {  
@@ -1117,6 +1128,16 @@ function set_private_key_path() {
     done
 }
 
+function modify_route_rules() {
+    local config_file="/usr/local/etc/sing-box/config.json"
+    local temp_config_file="/usr/local/etc/sing-box/temp_config.json"
+
+    if jq -e '.route.rules[] | select(.geosite != null)' "$config_file" >/dev/null; then
+        jq '(.route.rules |= [.[] | select(.geosite != null)] + [.[] | select(.geosite == null)])' "$config_file" > "$temp_config_file"
+        mv "$temp_config_file" "$config_file"
+    fi
+}
+
 function apply_certificate() {
     certificate_path="/etc/ssl/private/"$domain".crt"
     private_key_path="/etc/ssl/private/"$domain".key"
@@ -1385,9 +1406,10 @@ function select_unlocked_items() {
 1). ChatGPT
 2). Netflix
 3). Disney+
-请选择[1-3]: " choices
+4). YouTube
+请选择[1-4]: " choices
 
-        if [[ "$choices" =~ ^[123]+$ ]]; then
+        if [[ "$choices" =~ ^[1234]+$ ]]; then
             selected=($(echo "$choices" | sed 's/./& /g'))
             break
         else
@@ -1407,6 +1429,9 @@ function update_geosite_array() {
           ;;
         3)
           geosite+=("\"disney\"")
+          ;;
+        4)
+          geosite+=("\"youtube\"")
           ;;
         *)
           echo -e "${RED}无效的选择: $choice${NC}"
@@ -2533,7 +2558,7 @@ function update_route_file() {
     local config_file="/usr/local/etc/sing-box/config.json"
     local geosite_list=$(IFS=,; echo "${geosite[*]}") 
     local geosite_formatted=$(sed 's/,/,\\n          /g' <<< "$geosite_list") 
-
+    echo "正在配置 WireGuard..."
     sed -i '/"rules": \[/!b;a\
       {\
         "geosite": [\
@@ -2564,7 +2589,7 @@ function update_outbound_file() {
         }
     ' "$config_file" > "$config_file.tmp"
     mv "$config_file.tmp" "$config_file"
-    echo "warp配置完成。"
+    echo "WireGuard 配置完成。"
 }
 
 function write_phone_client_file() {
@@ -2643,7 +2668,7 @@ function generate_shadowsocks_yaml() {
         break
       fi
   done
-  awk -v proxy_name="$proxy_name" -v local_ip="$local_ip" -v listen_port="$listen_port" -v ss_method="$ss_method" -v ss_password="$ss_password" '/^proxies:$/ {print; print "  - name: " proxy_name; print "    type: ss"; print "    server:", local_ip; print "    port:", listen_port; print "    cipher:", ss_method; print "    password:", "\"" ss_password "\""; next} /- name: Proxy/ { print; flag_proxy=1; next } flag_proxy && flag_proxy++ == 3 { print "      - " proxy_name } /- name: auto/ { print; flag_auto=1; next } flag_auto && flag_auto++ == 3 { print "      - " proxy_name } 1' "$filename" > temp_file && mv temp_file "$filename"
+  awk -v proxy_name="$proxy_name" -v local_ip="$local_ip" -v listen_port="$listen_port" -v ss_method="$ss_method" -v ss_password="$ss_password" '/^proxies:$/ {print; print "  - name: " proxy_name; print "    type: ss"; print "    server:", local_ip; print "    port:", listen_port; print "    cipher:", ss_method; print "    password:", "\"" ss_password "\""; print ""; next} /- name: Proxy/ { print; flag_proxy=1; next } flag_proxy && flag_proxy++ == 3 { print "      - " proxy_name } /- name: auto/ { print; flag_auto=1; next } flag_auto && flag_auto++ == 3 { print "      - " proxy_name } 1' "$filename" > temp_file && mv temp_file "$filename"
 }
 
 function generate_tuic_phone_client_config() {
@@ -2729,7 +2754,7 @@ function generate_tuic_yaml() {
       fi
   done
 
-  awk -v proxy_name="$proxy_name" -v server_value="$server_value" -v server_name="$server_name" -v listen_port="$listen_port" -v user_uuid="$user_uuid" -v user_password="$user_password" -v congestion_control="$congestion_control" -v tls_insecure="$tls_insecure" '/^proxies:$/ {print; print "  - name: " proxy_name; print "    server:", server_value; print "    port:", listen_port; print "    type: tuic"; print "    uuid:", user_uuid; print "    password:", user_password; print "    sni:", server_name; print "    alpn: [h3]"; print "    request-timeout: 8000"; print "    udp-relay-mode: native"; print "    skip-cert-verify:", tls_insecure; print "    congestion-controller:", congestion_control; next} /- name: Proxy/ { print; flag_proxy=1; next } flag_proxy && flag_proxy++ == 3 { print "      - " proxy_name } /- name: auto/ { print; flag_auto=1; next } flag_auto && flag_auto++ == 3 { print "      - " proxy_name } 1' "$filename" > temp_file && mv temp_file "$filename"
+  awk -v proxy_name="$proxy_name" -v server_value="$server_value" -v server_name="$server_name" -v listen_port="$listen_port" -v user_uuid="$user_uuid" -v user_password="$user_password" -v congestion_control="$congestion_control" -v tls_insecure="$tls_insecure" '/^proxies:$/ {print; print "  - name: " proxy_name; print "    server:", server_value; print "    port:", listen_port; print "    type: tuic"; print "    uuid:", user_uuid; print "    password:", user_password; print "    sni:", server_name; print "    alpn: [h3]"; print "    request-timeout: 8000"; print "    udp-relay-mode: native"; print "    skip-cert-verify:", tls_insecure; print "    congestion-controller:", congestion_control; print ""; next} /- name: Proxy/ { print; flag_proxy=1; next } flag_proxy && flag_proxy++ == 3 { print "      - " proxy_name } /- name: auto/ { print; flag_auto=1; next } flag_auto && flag_auto++ == 3 { print "      - " proxy_name } 1' "$filename" > temp_file && mv temp_file "$filename"
 }
 
 function generate_socks_win_client_config() {
@@ -2777,7 +2802,7 @@ function generate_socks_yaml() {
         break
       fi
   done
-  awk -v proxy_name="$proxy_name" -v local_ip="$local_ip" -v listen_port="$listen_port" -v user_name="$user_name" -v user_password="$user_password" '/^proxies:$/ {print; print "  - name: " proxy_name; print "    type: socks5"; print "    server:", local_ip; print "    port:", listen_port; print "    username:", user_name; print "    password:", user_password; next} /- name: Proxy/ { print; flag_proxy=1; next } flag_proxy && flag_proxy++ == 3 { print "      - " proxy_name } /- name: auto/ { print; flag_auto=1; next } flag_auto && flag_auto++ == 3 { print "      - " proxy_name } 1' "$filename" > temp_file && mv temp_file "$filename"
+  awk -v proxy_name="$proxy_name" -v local_ip="$local_ip" -v listen_port="$listen_port" -v user_name="$user_name" -v user_password="$user_password" '/^proxies:$/ {print; print "  - name: " proxy_name; print "    type: socks5"; print "    server:", local_ip; print "    port:", listen_port; print "    username:", user_name; print "    password:", user_password; print ""; next} /- name: Proxy/ { print; flag_proxy=1; next } flag_proxy && flag_proxy++ == 3 { print "      - " proxy_name } /- name: auto/ { print; flag_auto=1; next } flag_auto && flag_auto++ == 3 { print "      - " proxy_name } 1' "$filename" > temp_file && mv temp_file "$filename"
 }
 
 function generate_Hysteria_win_client_config() {
@@ -2884,7 +2909,7 @@ function generate_Hysteria_yaml() {
     obfs_config=""
   fi
 
-  awk -v proxy_name="$proxy_name" -v server_value="$server_value" -v server_name="$server_name" -v listen_port="$listen_port" -v up_mbps="$up_mbps" -v down_mbps="$down_mbps" -v user_password="$user_password" -v obfs_config="$obfs_config" -v tls_insecure="$tls_insecure" '/^proxies:$/ {print; print "  - name: " proxy_name; print "    type: hysteria"; print "    server:", server_value; print "    port:", listen_port; print "    auth-str:", user_password obfs_config; print "    sni:", server_name; print "    skip-cert-verify:", tls_insecure; print "    alpn:"; print "      - h3"; print "    protocol: udp"; print "    up: \"" down_mbps " Mbps\""; print "    down: \"" up_mbps " Mbps\""; next} /- name: Proxy/ { print; flag_proxy=1; next } flag_proxy && flag_proxy++ == 3 { print "      - " proxy_name } /- name: auto/ { print; flag_auto=1; next } flag_auto && flag_auto++ == 3 { print "      - " proxy_name } 1' "$filename" > temp_file && mv temp_file "$filename"
+  awk -v proxy_name="$proxy_name" -v server_value="$server_value" -v server_name="$server_name" -v listen_port="$listen_port" -v up_mbps="$up_mbps" -v down_mbps="$down_mbps" -v user_password="$user_password" -v obfs_config="$obfs_config" -v tls_insecure="$tls_insecure" '/^proxies:$/ {print; print "  - name: " proxy_name; print "    type: hysteria"; print "    server:", server_value; print "    port:", listen_port; print "    auth-str:", user_password obfs_config; print "    sni:", server_name; print "    skip-cert-verify:", tls_insecure; print "    alpn:"; print "      - h3"; print "    protocol: udp"; print "    up: \"" down_mbps " Mbps\""; print "    down: \"" up_mbps " Mbps\""; print ""; next} /- name: Proxy/ { print; flag_proxy=1; next } flag_proxy && flag_proxy++ == 3 { print "      - " proxy_name } /- name: auto/ { print; flag_auto=1; next } flag_auto && flag_auto++ == 3 { print "      - " proxy_name } 1' "$filename" > temp_file && mv temp_file "$filename"
 }
 
 function generate_vmess_win_client_config() {
@@ -2976,7 +3001,7 @@ function generate_vmess_tcp_yaml() {
       break
     fi
   done
-  awk -v proxy_name="$proxy_name" -v local_ip="$local_ip" -v listen_port="$listen_port" -v user_uuid="$user_uuid" '/^proxies:$/ {print; print "  - name: " proxy_name; print "    type: vmess"; print "    server:", local_ip; print "    port:", listen_port; print "    uuid:", user_uuid; print "    alterId: 0"; print "    cipher: auto"; next} /- name: Proxy/ { print; flag_proxy=1; next } flag_proxy && flag_proxy++ == 3 { print "      - " proxy_name } /- name: auto/ { print; flag_auto=1; next } flag_auto && flag_auto++ == 3 { print "      - " proxy_name } 1' "$filename" > temp_file && mv temp_file "$filename"
+  awk -v proxy_name="$proxy_name" -v local_ip="$local_ip" -v listen_port="$listen_port" -v user_uuid="$user_uuid" '/^proxies:$/ {print; print "  - name: " proxy_name; print "    type: vmess"; print "    server:", local_ip; print "    port:", listen_port; print "    uuid:", user_uuid; print "    alterId: 0"; print "    cipher: auto"; print ""; next} /- name: Proxy/ { print; flag_proxy=1; next } flag_proxy && flag_proxy++ == 3 { print "      - " proxy_name } /- name: auto/ { print; flag_auto=1; next } flag_auto && flag_auto++ == 3 { print "      - " proxy_name } 1' "$filename" > temp_file && mv temp_file "$filename"
 }
 
 function generate_vmess_tcp_tls_yaml() {
@@ -3002,7 +3027,7 @@ function generate_vmess_tcp_tls_yaml() {
     fi
   done
 
-  awk -v proxy_name="$proxy_name" -v server_value="$server_value" -v server_name="$server_name" -v listen_port="$listen_port" -v user_uuid="$user_uuid" -v tls_insecure="$tls_insecure" '/^proxies:$/ {print; print "  - name: " proxy_name; print "    type: vmess"; print "    server:", server_value; print "    port:", listen_port; print "    uuid:", user_uuid; print "    alterId: 0"; print "    cipher: auto"; print "    tls: true"; print "    skip-cert-verify:", tls_insecure; print "    servername: " server_name; next} /- name: Proxy/ { print; flag_proxy=1; next } flag_proxy && flag_proxy++ == 3 { print "      - " proxy_name } /- name: auto/ { print; flag_auto=1; next } flag_auto && flag_auto++ == 3 { print "      - " proxy_name } 1' "$filename" > temp_file && mv temp_file "$filename"
+  awk -v proxy_name="$proxy_name" -v server_value="$server_value" -v server_name="$server_name" -v listen_port="$listen_port" -v user_uuid="$user_uuid" -v tls_insecure="$tls_insecure" '/^proxies:$/ {print; print "  - name: " proxy_name; print "    type: vmess"; print "    server:", server_value; print "    port:", listen_port; print "    uuid:", user_uuid; print "    alterId: 0"; print "    cipher: auto"; print "    tls: true"; print "    skip-cert-verify:", tls_insecure; print "    servername: " server_name; print ""; next} /- name: Proxy/ { print; flag_proxy=1; next } flag_proxy && flag_proxy++ == 3 { print "      - " proxy_name } /- name: auto/ { print; flag_auto=1; next } flag_auto && flag_auto++ == 3 { print "      - " proxy_name } 1' "$filename" > temp_file && mv temp_file "$filename"
 }
 
 function generate_vmess_ws_yaml() {
@@ -3014,7 +3039,7 @@ function generate_vmess_ws_yaml() {
       break
     fi
   done
-  awk -v proxy_name="$proxy_name" -v local_ip="$local_ip" -v listen_port="$listen_port" -v user_uuid="$user_uuid" -v transport_path="$transport_path" '/^proxies:$/ {print; print "  - name: " proxy_name; print "    type: vmess"; print "    server:", local_ip; print "    port:", listen_port; print "    uuid:", user_uuid; print "    alterId: 0"; print "    cipher: auto"; print "    network: ws"; print "    ws-opts:"; print "      path: " transport_path; print "      max-early-data: 2048"; print "      early-data-header-name: Sec-WebSocket-Protocol"; next} /- name: Proxy/ { print; flag_proxy=1; next } flag_proxy && flag_proxy++ == 3 { print "      - " proxy_name } /- name: auto/ { print; flag_auto=1; next } flag_auto && flag_auto++ == 3 { print "      - " proxy_name } 1' "$filename" > temp_file && mv temp_file "$filename"
+  awk -v proxy_name="$proxy_name" -v local_ip="$local_ip" -v listen_port="$listen_port" -v user_uuid="$user_uuid" -v transport_path="$transport_path" '/^proxies:$/ {print; print "  - name: " proxy_name; print "    type: vmess"; print "    server:", local_ip; print "    port:", listen_port; print "    uuid:", user_uuid; print "    alterId: 0"; print "    cipher: auto"; print "    network: ws"; print "    ws-opts:"; print "      path: " transport_path; print "      max-early-data: 2048"; print "      early-data-header-name: Sec-WebSocket-Protocol"; print ""; next} /- name: Proxy/ { print; flag_proxy=1; next } flag_proxy && flag_proxy++ == 3 { print "      - " proxy_name } /- name: auto/ { print; flag_auto=1; next } flag_auto && flag_auto++ == 3 { print "      - " proxy_name } 1' "$filename" > temp_file && mv temp_file "$filename"
 }
 
 function generate_vmess_ws_tls_yaml() {
@@ -3040,7 +3065,7 @@ function generate_vmess_ws_tls_yaml() {
     fi
   done
 
-  awk -v proxy_name="$proxy_name" -v server_value="$server_value" -v server_name="$server_name" -v listen_port="$listen_port" -v user_uuid="$user_uuid" -v transport_path="$transport_path" -v tls_insecure="$tls_insecure" '/^proxies:$/ {print; print "  - name: " proxy_name; print "    type: vmess"; print "    server:", server_value; print "    port:", listen_port; print "    uuid:", user_uuid; print "    alterId: 0"; print "    cipher: auto"; print "    network: ws"; print "    tls: true"; print "    skip-cert-verify:", tls_insecure; print "    servername:", server_name; print "    ws-opts:"; print "      path: " transport_path; print "      max-early-data: 2048"; print "      early-data-header-name: Sec-WebSocket-Protocol"; next} /- name: Proxy/ { print; flag_proxy=1; next } flag_proxy && flag_proxy++ == 3 { print "      - " proxy_name } /- name: auto/ { print; flag_auto=1; next } flag_auto && flag_auto++ == 3 { print "      - " proxy_name } 1' "$filename" > temp_file && mv temp_file "$filename"
+  awk -v proxy_name="$proxy_name" -v server_value="$server_value" -v server_name="$server_name" -v listen_port="$listen_port" -v user_uuid="$user_uuid" -v transport_path="$transport_path" -v tls_insecure="$tls_insecure" '/^proxies:$/ {print; print "  - name: " proxy_name; print "    type: vmess"; print "    server:", server_value; print "    port:", listen_port; print "    uuid:", user_uuid; print "    alterId: 0"; print "    cipher: auto"; print "    network: ws"; print "    tls: true"; print "    skip-cert-verify:", tls_insecure; print "    servername:", server_name; print "    ws-opts:"; print "      path: " transport_path; print "      max-early-data: 2048"; print "      early-data-header-name: Sec-WebSocket-Protocol"; print ""; next} /- name: Proxy/ { print; flag_proxy=1; next } flag_proxy && flag_proxy++ == 3 { print "      - " proxy_name } /- name: auto/ { print; flag_auto=1; next } flag_auto && flag_auto++ == 3 { print "      - " proxy_name } 1' "$filename" > temp_file && mv temp_file "$filename"
 }
 
 function generate_vmess_grpc_yaml() {
@@ -3052,7 +3077,7 @@ function generate_vmess_grpc_yaml() {
       break
     fi
   done
-  awk -v proxy_name="$proxy_name" -v local_ip="$local_ip" -v listen_port="$listen_port" -v user_uuid="$user_uuid" -v transport_service_name="$transport_service_name" '/^proxies:$/ {print; print "  - name: " proxy_name; print "    type: vmess"; print "    server:", local_ip; print "    port:", listen_port; print "    uuid:", user_uuid; print "    alterId: 0"; print "    cipher: auto"; print "    network: grpc"; print "    grpc-opts:"; print "      grpc-service-name:", "\"" transport_service_name "\""; next} /- name: Proxy/ { print; flag_proxy=1; next } flag_proxy && flag_proxy++ == 3 { print "      - " proxy_name } /- name: auto/ { print; flag_auto=1; next } flag_auto && flag_auto++ == 3 { print "      - " proxy_name } 1' "$filename" > temp_file && mv temp_file "$filename"
+  awk -v proxy_name="$proxy_name" -v local_ip="$local_ip" -v listen_port="$listen_port" -v user_uuid="$user_uuid" -v transport_service_name="$transport_service_name" '/^proxies:$/ {print; print "  - name: " proxy_name; print "    type: vmess"; print "    server:", local_ip; print "    port:", listen_port; print "    uuid:", user_uuid; print "    alterId: 0"; print "    cipher: auto"; print "    network: grpc"; print "    grpc-opts:"; print "      grpc-service-name:", "\"" transport_service_name "\""; print ""; next} /- name: Proxy/ { print; flag_proxy=1; next } flag_proxy && flag_proxy++ == 3 { print "      - " proxy_name } /- name: auto/ { print; flag_auto=1; next } flag_auto && flag_auto++ == 3 { print "      - " proxy_name } 1' "$filename" > temp_file && mv temp_file "$filename"
 }
 
 function generate_vmess_grpc_tls_yaml() {
@@ -3078,7 +3103,7 @@ function generate_vmess_grpc_tls_yaml() {
     fi
   done
 
-  awk -v proxy_name="$proxy_name" -v server_value="$server_value" -v server_name="$server_name" -v listen_port="$listen_port" -v user_uuid="$user_uuid" -v transport_service_name="$transport_service_name" -v tls_insecure="$tls_insecure" '/^proxies:$/ {print; print "  - name: " proxy_name; print "    type: vmess"; print "    server:", server_value; print "    port:", listen_port; print "    uuid:", user_uuid; print "    alterId: 0"; print "    cipher: auto"; print "    network: grpc"; print "    tls: true"; print "    skip-cert-verify:", tls_insecure; print "    servername:", server_name; print "    grpc-opts:"; print "      grpc-service-name:", "\"" transport_service_name "\""; next} /- name: Proxy/ { print; flag_proxy=1; next } flag_proxy && flag_proxy++ == 3 { print "      - " proxy_name } /- name: auto/ { print; flag_auto=1; next } flag_auto && flag_auto++ == 3 { print "      - " proxy_name } 1' "$filename" > temp_file && mv temp_file "$filename"
+  awk -v proxy_name="$proxy_name" -v server_value="$server_value" -v server_name="$server_name" -v listen_port="$listen_port" -v user_uuid="$user_uuid" -v transport_service_name="$transport_service_name" -v tls_insecure="$tls_insecure" '/^proxies:$/ {print; print "  - name: " proxy_name; print "    type: vmess"; print "    server:", server_value; print "    port:", listen_port; print "    uuid:", user_uuid; print "    alterId: 0"; print "    cipher: auto"; print "    network: grpc"; print "    tls: true"; print "    skip-cert-verify:", tls_insecure; print "    servername:", server_name; print "    grpc-opts:"; print "      grpc-service-name:", "\"" transport_service_name "\""; print ""; next} /- name: Proxy/ { print; flag_proxy=1; next } flag_proxy && flag_proxy++ == 3 { print "      - " proxy_name } /- name: auto/ { print; flag_auto=1; next } flag_auto && flag_auto++ == 3 { print "      - " proxy_name } 1' "$filename" > temp_file && mv temp_file "$filename"
 }
 
 function generate_Hysteria2_phone_client_config() {
@@ -3192,7 +3217,7 @@ function generate_Hysteria2_yaml() {
     obfs_config=""
   fi
 
-  awk -v proxy_name="$proxy_name" -v server_value="$server_value" -v server_name="$server_name" -v listen_port="$listen_port" -v up_mbps="$up_mbps" -v down_mbps="$down_mbps" -v user_password="$user_password" -v obfs_config="$obfs_config" -v tls_insecure="$tls_insecure" '/^proxies:$/ {print; print "  - name: " proxy_name; print "    type: hysteria2"; print "    server:", server_value; print "    port:", listen_port; print "    password:", user_password obfs_config; print "    alpn:"; print "      - h3"; print "    sni:", server_name; print "    skip-cert-verify:", tls_insecure; print "    up: \"" down_mbps " Mbps\""; print "    down: \"" up_mbps " Mbps\""; next} /- name: Proxy/ { print; flag_proxy=1; next } flag_proxy && flag_proxy++ == 3 { print "      - " proxy_name } /- name: auto/ { print; flag_auto=1; next } flag_auto && flag_auto++ == 3 { print "      - " proxy_name } 1' "$filename" > temp_file && mv temp_file "$filename"
+  awk -v proxy_name="$proxy_name" -v server_value="$server_value" -v server_name="$server_name" -v listen_port="$listen_port" -v up_mbps="$up_mbps" -v down_mbps="$down_mbps" -v user_password="$user_password" -v obfs_config="$obfs_config" -v tls_insecure="$tls_insecure" '/^proxies:$/ {print; print "  - name: " proxy_name; print "    type: hysteria2"; print "    server:", server_value; print "    port:", listen_port; print "    password:", user_password obfs_config; print "    alpn:"; print "      - h3"; print "    sni:", server_name; print "    skip-cert-verify:", tls_insecure; print "    up: \"" down_mbps " Mbps\""; print "    down: \"" up_mbps " Mbps\""; print ""; next} /- name: Proxy/ { print; flag_proxy=1; next } flag_proxy && flag_proxy++ == 3 { print "      - " proxy_name } /- name: auto/ { print; flag_auto=1; next } flag_auto && flag_auto++ == 3 { print "      - " proxy_name } 1' "$filename" > temp_file && mv temp_file "$filename"
 }
 
 function generate_vless_win_client_config() {
@@ -3256,7 +3281,7 @@ function generate_vless_tcp_yaml() {
       break
     fi
   done
-  awk -v proxy_name="$proxy_name" -v local_ip="$local_ip" -v listen_port="$listen_port" -v user_uuid="$user_uuid" '/^proxies:$/ {print; print "  - name: " proxy_name; print "    type: vless"; print "    server:", local_ip; print "    port:", listen_port; print "    uuid:", user_uuid; print "    network: tcp"; print "    udp: true"; next} /- name: Proxy/ { print; flag_proxy=1; next } flag_proxy && flag_proxy++ == 3 { print "      - " proxy_name } /- name: auto/ { print; flag_auto=1; next } flag_auto && flag_auto++ == 3 { print "      - " proxy_name } 1' "$filename" > temp_file && mv temp_file "$filename"
+  awk -v proxy_name="$proxy_name" -v local_ip="$local_ip" -v listen_port="$listen_port" -v user_uuid="$user_uuid" '/^proxies:$/ {print; print "  - name: " proxy_name; print "    type: vless"; print "    server:", local_ip; print "    port:", listen_port; print "    uuid:", user_uuid; print "    network: tcp"; print "    udp: true"; print ""; next} /- name: Proxy/ { print; flag_proxy=1; next } flag_proxy && flag_proxy++ == 3 { print "      - " proxy_name } /- name: auto/ { print; flag_auto=1; next } flag_auto && flag_auto++ == 3 { print "      - " proxy_name } 1' "$filename" > temp_file && mv temp_file "$filename"
 }
 
 function generate_vless_ws_yaml() {
@@ -3268,7 +3293,7 @@ function generate_vless_ws_yaml() {
       break
     fi
   done
-  awk -v proxy_name="$proxy_name" -v local_ip="$local_ip" -v listen_port="$listen_port" -v user_uuid="$user_uuid" -v transport_path="$transport_path" '/^proxies:$/ {print; print "  - name: " proxy_name; print "    type: vless"; print "    server:", local_ip; print "    port:", listen_port; print "    uuid:", user_uuid; print "    network: ws"; print "    udp: true"; print "    ws-opts:"; print "      path: " transport_path; print "      max-early-data: 2048"; print "      early-data-header-name: Sec-WebSocket-Protocol"; next} /- name: Proxy/ { print; flag_proxy=1; next } flag_proxy && flag_proxy++ == 3 { print "      - " proxy_name } /- name: auto/ { print; flag_auto=1; next } flag_auto && flag_auto++ == 3 { print "      - " proxy_name } 1' "$filename" > temp_file && mv temp_file "$filename"
+  awk -v proxy_name="$proxy_name" -v local_ip="$local_ip" -v listen_port="$listen_port" -v user_uuid="$user_uuid" -v transport_path="$transport_path" '/^proxies:$/ {print; print "  - name: " proxy_name; print "    type: vless"; print "    server:", local_ip; print "    port:", listen_port; print "    uuid:", user_uuid; print "    network: ws"; print "    udp: true"; print "    ws-opts:"; print "      path: " transport_path; print "      max-early-data: 2048"; print "      early-data-header-name: Sec-WebSocket-Protocol"; print ""; next} /- name: Proxy/ { print; flag_proxy=1; next } flag_proxy && flag_proxy++ == 3 { print "      - " proxy_name } /- name: auto/ { print; flag_auto=1; next } flag_auto && flag_auto++ == 3 { print "      - " proxy_name } 1' "$filename" > temp_file && mv temp_file "$filename"
 }
 
 function generate_vless_grpc_yaml() {
@@ -3280,7 +3305,7 @@ function generate_vless_grpc_yaml() {
       break
     fi
   done
-  awk -v proxy_name="$proxy_name" -v local_ip="$local_ip" -v listen_port="$listen_port" -v user_uuid="$user_uuid" -v transport_service_name="$transport_service_name" '/^proxies:$/ {print; print "  - name: " proxy_name; print "    type: vless"; print "    server:", local_ip; print "    port:", listen_port; print "    uuid:", user_uuid; print "    network: grpc"; print "    udp: true"; print "    grpc-opts:"; print "      grpc-service-name:", "\"" transport_service_name "\""; next} /- name: Proxy/ { print; flag_proxy=1; next } flag_proxy && flag_proxy++ == 3 { print "      - " proxy_name } /- name: auto/ { print; flag_auto=1; next } flag_auto && flag_auto++ == 3 { print "      - " proxy_name } 1' "$filename" > temp_file && mv temp_file "$filename"
+  awk -v proxy_name="$proxy_name" -v local_ip="$local_ip" -v listen_port="$listen_port" -v user_uuid="$user_uuid" -v transport_service_name="$transport_service_name" '/^proxies:$/ {print; print "  - name: " proxy_name; print "    type: vless"; print "    server:", local_ip; print "    port:", listen_port; print "    uuid:", user_uuid; print "    network: grpc"; print "    udp: true"; print "    grpc-opts:"; print "      grpc-service-name:", "\"" transport_service_name "\""; print ""; next} /- name: Proxy/ { print; flag_proxy=1; next } flag_proxy && flag_proxy++ == 3 { print "      - " proxy_name } /- name: auto/ { print; flag_auto=1; next } flag_auto && flag_auto++ == 3 { print "      - " proxy_name } 1' "$filename" > temp_file && mv temp_file "$filename"
 }
 
 function generate_vless_reality_vision_yaml() {
@@ -3292,7 +3317,7 @@ function generate_vless_reality_vision_yaml() {
       break
     fi
   done
-  awk -v proxy_name="$proxy_name" -v local_ip="$local_ip" -v server_name="$server_name" -v listen_port="$listen_port" -v user_uuid="$user_uuid" -v public_key="$public_key" -v short_id="$short_id" '/^proxies:$/ {print; print "  - name: " proxy_name; print "    type: vless"; print "    server:", local_ip; print "    port:", listen_port; print "    uuid:", user_uuid; print "    network: tcp"; print "    udp: true"; print "    tls: true"; print "    flow: xtls-rprx-vision"; print "    servername:", server_name; print "    reality-opts:"; print "      public-key:", public_key; print "      short-id:", short_id; next} /- name: Proxy/ { print; flag_proxy=1; next } flag_proxy && flag_proxy++ == 3 { print "      - " proxy_name } /- name: auto/ { print; flag_auto=1; next } flag_auto && flag_auto++ == 3 { print "      - " proxy_name } 1' "$filename" > temp_file && mv temp_file "$filename"
+  awk -v proxy_name="$proxy_name" -v local_ip="$local_ip" -v server_name="$server_name" -v listen_port="$listen_port" -v user_uuid="$user_uuid" -v public_key="$public_key" -v short_id="$short_id" '/^proxies:$/ {print; print "  - name: " proxy_name; print "    type: vless"; print "    server:", local_ip; print "    port:", listen_port; print "    uuid:", user_uuid; print "    network: tcp"; print "    udp: true"; print "    tls: true"; print "    flow: xtls-rprx-vision"; print "    servername:", server_name; print "    reality-opts:"; print "      public-key:", public_key; print "      short-id:", short_id; print ""; next} /- name: Proxy/ { print; flag_proxy=1; next } flag_proxy && flag_proxy++ == 3 { print "      - " proxy_name } /- name: auto/ { print; flag_auto=1; next } flag_auto && flag_auto++ == 3 { print "      - " proxy_name } 1' "$filename" > temp_file && mv temp_file "$filename"
 }
 
 function generate_vless_reality_grpc_yaml() {
@@ -3304,7 +3329,7 @@ function generate_vless_reality_grpc_yaml() {
       break
     fi
   done
-  awk -v proxy_name="$proxy_name" -v local_ip="$local_ip" -v server_name="$server_name" -v listen_port="$listen_port" -v user_uuid="$user_uuid" -v public_key="$public_key" -v short_id="$short_id" -v transport_service_name="$transport_service_name" '/^proxies:$/ {print; print "  - name: " proxy_name; print "    type: vless"; print "    server:", local_ip; print "    port:", listen_port; print "    uuid:", user_uuid; print "    network: grpc"; print "    udp: true"; print "    tls: true"; print "    flow: "; print "    servername:", server_name; print "    reality-opts:"; print "      public-key:", public_key; print "      short-id:", short_id; print "    grpc-opts:"; print "      grpc-service-name:", "\"" transport_service_name "\""; next} /- name: Proxy/ { print; flag_proxy=1; next } flag_proxy && flag_proxy++ == 3 { print "      - " proxy_name } /- name: auto/ { print; flag_auto=1; next } flag_auto && flag_auto++ == 3 { print "      - " proxy_name } 1' "$filename" > temp_file && mv temp_file "$filename"
+  awk -v proxy_name="$proxy_name" -v local_ip="$local_ip" -v server_name="$server_name" -v listen_port="$listen_port" -v user_uuid="$user_uuid" -v public_key="$public_key" -v short_id="$short_id" -v transport_service_name="$transport_service_name" '/^proxies:$/ {print; print "  - name: " proxy_name; print "    type: vless"; print "    server:", local_ip; print "    port:", listen_port; print "    uuid:", user_uuid; print "    network: grpc"; print "    udp: true"; print "    tls: true"; print "    flow: "; print "    servername:", server_name; print "    reality-opts:"; print "      public-key:", public_key; print "      short-id:", short_id; print "    grpc-opts:"; print "      grpc-service-name:", "\"" transport_service_name "\""; print ""; next} /- name: Proxy/ { print; flag_proxy=1; next } flag_proxy && flag_proxy++ == 3 { print "      - " proxy_name } /- name: auto/ { print; flag_auto=1; next } flag_auto && flag_auto++ == 3 { print "      - " proxy_name } 1' "$filename" > temp_file && mv temp_file "$filename"
 }
 
 function generate_trojan_phone_client_config() {
@@ -3409,7 +3434,7 @@ function generate_trojan_tcp_tls_yaml() {
       break
     fi
   done
-  awk -v proxy_name="$proxy_name" -v server_value="$server_value" -v server_name="$server_name" -v listen_port="$listen_port" -v user_password="$user_password" -v tls_insecure="$tls_insecure" '/^proxies:$/ {print; print "  - name: " proxy_name; print "    type: trojan"; print "    server:", server_value; print "    port:", listen_port; print "    password:", user_password; print "    udp: true"; print "    sni:", server_name; print "    skip-cert-verify:", tls_insecure; print "    alpn:"; print "      - h2"; print "      - http/1.1"; next} /- name: Proxy/ { print; flag_proxy=1; next } flag_proxy && flag_proxy++ == 3 { print "      - " proxy_name } /- name: auto/ { print; flag_auto=1; next } flag_auto && flag_auto++ == 3 { print "      - " proxy_name } 1' "$filename" > temp_file && mv temp_file "$filename"
+  awk -v proxy_name="$proxy_name" -v server_value="$server_value" -v server_name="$server_name" -v listen_port="$listen_port" -v user_password="$user_password" -v tls_insecure="$tls_insecure" '/^proxies:$/ {print; print "  - name: " proxy_name; print "    type: trojan"; print "    server:", server_value; print "    port:", listen_port; print "    password:", user_password; print "    udp: true"; print "    sni:", server_name; print "    skip-cert-verify:", tls_insecure; print "    alpn:"; print "      - h2"; print "      - http/1.1"; print ""; next} /- name: Proxy/ { print; flag_proxy=1; next } flag_proxy && flag_proxy++ == 3 { print "      - " proxy_name } /- name: auto/ { print; flag_auto=1; next } flag_auto && flag_auto++ == 3 { print "      - " proxy_name } 1' "$filename" > temp_file && mv temp_file "$filename"
 }
 
 function generate_trojan_ws_tls_yaml() {
@@ -3434,7 +3459,7 @@ function generate_trojan_ws_tls_yaml() {
       break
     fi
   done
-  awk -v proxy_name="$proxy_name" -v server_value="$server_value" -v server_name="$server_name" -v listen_port="$listen_port" -v user_password="$user_password" -v transport_path="$transport_path" -v tls_insecure="$tls_insecure" '/^proxies:$/ {print; print "  - name: " proxy_name; print "    type: trojan"; print "    server:", server_value; print "    port:", listen_port; print "    password:", "\"" user_password "\""; print "    network: ws"; print "    sni:", server_name; print "    skip-cert-verify:", tls_insecure; print "    udp: true"; print "    ws-opts:"; print "      path:", transport_path; next} /- name: Proxy/ { print; flag_proxy=1; next } flag_proxy && flag_proxy++ == 3 { print "      - " proxy_name } /- name: auto/ { print; flag_auto=1; next } flag_auto && flag_auto++ == 3 { print "      - " proxy_name } 1' "$filename" > temp_file && mv temp_file "$filename"
+  awk -v proxy_name="$proxy_name" -v server_value="$server_value" -v server_name="$server_name" -v listen_port="$listen_port" -v user_password="$user_password" -v transport_path="$transport_path" -v tls_insecure="$tls_insecure" '/^proxies:$/ {print; print "  - name: " proxy_name; print "    type: trojan"; print "    server:", server_value; print "    port:", listen_port; print "    password:", "\"" user_password "\""; print "    network: ws"; print "    sni:", server_name; print "    skip-cert-verify:", tls_insecure; print "    udp: true"; print "    ws-opts:"; print "      path:", transport_path; print ""; next} /- name: Proxy/ { print; flag_proxy=1; next } flag_proxy && flag_proxy++ == 3 { print "      - " proxy_name } /- name: auto/ { print; flag_auto=1; next } flag_auto && flag_auto++ == 3 { print "      - " proxy_name } 1' "$filename" > temp_file && mv temp_file "$filename"
 }
 
 function generate_trojan_grpc_tls_yaml() {
@@ -3459,7 +3484,7 @@ function generate_trojan_grpc_tls_yaml() {
       break
     fi
   done
-  awk -v proxy_name="$proxy_name" -v server_value="$server_value" -v server_name="$server_name" -v listen_port="$listen_port" -v user_password="$user_password" -v transport_service_name="$transport_service_name" -v tls_insecure="$tls_insecure" '/^proxies:$/ {print; print "  - name: " proxy_name; print "    type: trojan"; print "    server:", server_value; print "    port:", listen_port; print "    password:", "\"" user_password "\""; print "    network: grpc"; print "    sni:", server_name; print "    udp: true"; print "    skip-cert-verify:", tls_insecure; print "    grpc-opts:"; print "      grpc-service-name:", "\"" transport_service_name "\""; next} /- name: Proxy/ { print; flag_proxy=1; next } flag_proxy && flag_proxy++ == 3 { print "      - " proxy_name } /- name: auto/ { print; flag_auto=1; next } flag_auto && flag_auto++ == 3 { print "      - " proxy_name } 1' "$filename" > temp_file && mv temp_file "$filename"
+  awk -v proxy_name="$proxy_name" -v server_value="$server_value" -v server_name="$server_name" -v listen_port="$listen_port" -v user_password="$user_password" -v transport_service_name="$transport_service_name" -v tls_insecure="$tls_insecure" '/^proxies:$/ {print; print "  - name: " proxy_name; print "    type: trojan"; print "    server:", server_value; print "    port:", listen_port; print "    password:", "\"" user_password "\""; print "    network: grpc"; print "    sni:", server_name; print "    udp: true"; print "    skip-cert-verify:", tls_insecure; print "    grpc-opts:"; print "      grpc-service-name:", "\"" transport_service_name "\""; print ""; next} /- name: Proxy/ { print; flag_proxy=1; next } flag_proxy && flag_proxy++ == 3 { print "      - " proxy_name } /- name: auto/ { print; flag_auto=1; next } flag_auto && flag_auto++ == 3 { print "      - " proxy_name } 1' "$filename" > temp_file && mv temp_file "$filename"
 }
 
 function generate_shadowtls_win_client_config() {
@@ -3509,7 +3534,7 @@ function generate_shadowtls_yaml() {
       break
     fi
   done
-  awk -v proxy_name="$proxy_name" -v method="$method" -v ss_password="$ss_password" -v local_ip="$local_ip" -v listen_port="$listen_port" -v stls_password="$stls_password" -v user_input="$user_input" '/^proxies:$/ {print; print "  - name: " proxy_name; print "    type: ss"; print "    server:", local_ip; print "    port:", listen_port; print "    cipher:", method; print "    password:", "\"" ss_password "\""; print "    plugin: shadow-tls"; print "    plugin-opts:"; print "      host: \"" user_input "\""; print "      password:", "\"" stls_password "\""; print "      version: 3"; next} /- name: Proxy/ { print; flag_proxy=1; next } flag_proxy && flag_proxy++ == 3 { print "      - " proxy_name } /- name: auto/ { print; flag_auto=1; next } flag_auto && flag_auto++ == 3 { print "      - " proxy_name } 1' "$filename" > temp_file && mv temp_file "$filename"
+  awk -v proxy_name="$proxy_name" -v method="$method" -v ss_password="$ss_password" -v local_ip="$local_ip" -v listen_port="$listen_port" -v stls_password="$stls_password" -v user_input="$user_input" '/^proxies:$/ {print; print "  - name: " proxy_name; print "    type: ss"; print "    server:", local_ip; print "    port:", listen_port; print "    cipher:", method; print "    password:", "\"" ss_password "\""; print "    plugin: shadow-tls"; print "    plugin-opts:"; print "      host: \"" user_input "\""; print "      password:", "\"" stls_password "\""; print "      version: 3"; print ""; next} /- name: Proxy/ { print; flag_proxy=1; next } flag_proxy && flag_proxy++ == 3 { print "      - " proxy_name } /- name: auto/ { print; flag_auto=1; next } flag_auto && flag_auto++ == 3 { print "      - " proxy_name } 1' "$filename" > temp_file && mv temp_file "$filename"
 }
 
 function generate_naive_win_client_config() {
@@ -3518,10 +3543,148 @@ function generate_naive_win_client_config() {
     echo "电脑端配置文件已保存至$naive_client_file，请下载后使用！"
 }
 
+function extract_types_tags() {
+    local config_file="/usr/local/etc/sing-box/config.json"
+    filtered_tags=()
+    types=()
+
+    tags=($(jq -r '.inbounds[] | select(.tag != null) | .tag' "$config_file"))
+    detour_tag=$(jq -r '.inbounds[] | select(.type == "shadowtls") | .detour' "$config_file")
+    wireguard_type=$(jq -r '.outbounds[] | select(.type == "wireguard" and .tag == "wireguard-out") | .type' "$config_file")
+
+    if [ -z "$tags" ] && [ -z "$wireguard_type" ]; then
+        echo "未检测到节点配置，请搭建节点后再使用本选项！"
+        exit 0
+    fi
+    filtered_tags=()
+    for tag in "${tags[@]}"; do
+        if [ "$tag" != "$detour_tag" ]; then
+            filtered_tags+=("$tag")
+        fi
+    done
+
+    max_length=0
+    for tag in "${filtered_tags[@]}"; do
+        tag_length=${#tag}
+        if ((tag_length > max_length)); then
+            max_length=$tag_length
+        fi
+    done
+
+    for ((i=0; i<${#filtered_tags[@]}; i++)); do
+        type=$(jq -r --arg tag "${filtered_tags[$i]}" '.inbounds[] | select(.tag == $tag) | .type' "$config_file")
+        types[$i]=$type
+        printf "%d).协议类型: %-20s 入站标签: %s\n" "$((i+1))" "$type" "${filtered_tags[$i]}"
+    done
+
+    if [ ! -z "$wireguard_type" ]; then
+        types[$i]=$wireguard_type
+        printf "%d).协议类型: %-20s 出站标签: %s\n" "$((i+1))" "$wireguard_type" "wireguard-out"
+    fi
+}
+
+function delete_choice() {
+    local config_file="/usr/local/etc/sing-box/config.json"
+    local phone_client_file="/usr/local/etc/sing-box/phone_client.json"
+    local win_client_file="/usr/local/etc/sing-box/win_client.json"
+    local clash_yaml="/usr/local/etc/sing-box/clash.yaml"
+    local output_file="/usr/local/etc/sing-box/output.txt"
+    local temp_json="/usr/local/etc/sing-box/temp.json"
+    local temp_yaml="/usr/local/etc/sing-box/temp.yaml"
+    
+    extract_types_tags
+    valid_choice=false
+    while [ "$valid_choice" == false ]; do
+        read -p "请选择要删除的节点配置（输入对应的数字）: " choice
+        if [[ ! $choice =~ ^[0-9]+$ || $choice -lt 1 || $choice -gt ${#types[@]} ]]; then
+            echo -e "${RED}错误：无效的选择，请重新输入！${NC}"
+        else
+            valid_choice=true
+        fi
+    done
+
+    selected_tag="${filtered_tags[$choice-1]}"
+    selected_type="${types[$choice-1]}"
+    listen_port=$(jq -r --arg selected_tag "$selected_tag" '.inbounds[] | select(.tag == $selected_tag) | .listen_port' "$config_file" | awk '{print int($0)}')
+    if [ "$selected_type" == "wireguard" ]; then
+        jq '.outbounds |= map(select(.tag != "warp-IPv4-out" and .tag != "warp-IPv6-out" and .tag != "wireguard-out"))' "$config_file" > "$temp_json"
+        mv "$temp_json" "$config_file"
+        jq '.route.rules |= map(select(.outbound != "warp-IPv4-out" and .outbound != "warp-IPv6-out"))' "$config_file" > "$temp_json"
+        mv "$temp_json" "$config_file"
+    else
+        detour_tag=$(jq -r --arg selected_tag "$selected_tag" '.inbounds[] | select(.type == "shadowtls" and .tag == $selected_tag) | .detour' "$config_file")
+        jq --arg selected_tag "$selected_tag" --arg detour_tag "$detour_tag" '.inbounds |= map(select(.tag != $selected_tag and .tag != $detour_tag))' "$config_file" > "$temp_json"
+        mv "$temp_json" "$config_file"
+        jq --arg selected_tag "$selected_tag" '.route.rules |= map(select(.inbound[0] != $selected_tag))' "$config_file" > "$temp_json"
+        mv "$temp_json" "$config_file"
+    fi
+
+    if [ "$selected_type" != "wireguard" ]; then
+        awk -v port="$listen_port" '$0 ~ "监听端口: " port {print; in_block=1; next} in_block && NF == 0 {in_block=0} !in_block' "$output_file" > "$output_file.tmp1"
+        mv "$output_file.tmp1" "$output_file"
+        awk -v port="$listen_port" '$0 ~ "监听端口: " port {start=NR; next} {lines[NR]=$0} END {for (i=1; i<=NR; i++) if (i < start - 4 || i > start) print lines[i]}' "$output_file" > "$output_file.tmp2"
+        mv "$output_file.tmp2" "$output_file"
+        sed -i '/./,$!d' "$output_file"
+    fi
+
+    get_clash_tags=$(awk '/proxies:/ {in_proxies_block=1} in_proxies_block && /- name:/ {name = $3} in_proxies_block && /port:/ {port = $2; print "Name:", name, "Port:", port}' "$clash_yaml" > "$temp_yaml")
+    matching_clash_tag=$(grep "Port: $listen_port" "$temp_yaml" | awk '{print $2}')
+    if [ -n "$listen_port" ]; then
+        phone_matching_tag=$(jq -r --argjson listen_port "$listen_port" '.outbounds[] | select(.server_port == $listen_port) | .tag' "$phone_client_file")
+        win_matching_tag=$(jq -r --argjson listen_port "$listen_port" '.outbounds[] | select(.server_port == $listen_port) | .tag' "$win_client_file")
+    fi
+    jq --arg tag "$phone_matching_tag" '.outbounds |= map(select(.tag != $tag))' "$phone_client_file" > "$temp_json"
+    mv "$temp_json" "$phone_client_file"
+    jq --arg tag "$win_matching_tag" '.outbounds |= map(select(.tag != $tag))' "$win_client_file" > "$temp_json"
+    mv "$temp_json" "$win_client_file"
+
+    if [ -n "$matching_clash_tag" ] && [ "$selected_type" != "wireguard" ]; then
+      sed -i "/^  - name: $matching_clash_tag$/,/^\s*$/d" "$clash_yaml"
+      sed -i "/proxy-groups:/,/^\s*$/ {/      - $matching_clash_tag/d}" "$clash_yaml"
+    fi
+
+    phone_matching_detour=$(jq -r --arg phone_matching_tag "$phone_matching_tag" '.outbounds[] | select(.detour == $phone_matching_tag) | .detour' "$phone_client_file")
+    win_matching_detour=$(jq -r --arg win_matching_tag "$win_matching_tag" '.outbounds[] | select(.detour == $win_matching_tag) | .detour' "$win_client_file")
+    phone_matching_detour_tag=$(jq -r --arg phone_matching_detour "$phone_matching_detour" '.outbounds[] | select(.detour == $phone_matching_detour) | .tag' "$phone_client_file")
+    win_matching_detour_tag=$(jq -r --arg win_matching_detour "$win_matching_detour" '.outbounds[] | select(.detour == $win_matching_detour) | .tag' "$win_client_file")
+    awk -v phone_matching_tag="$phone_matching_tag" '!/^      "outbounds": \[$/,/^\s*]/{if (!($0 ~ "^ * \"" phone_matching_tag "\"")) print; else next; }' "$phone_client_file" > "$phone_client_file.tmp"
+    mv "$phone_client_file.tmp" "$phone_client_file"
+    awk -v win_matching_tag="$win_matching_tag" '!/^      "outbounds": \[$/,/^\s*]/{if (!($0 ~ "^ * \"" win_matching_tag "\"")) print; else next; }' "$win_client_file" > "$win_client_file.tmp"
+    mv "$win_client_file.tmp" "$win_client_file"
+    
+    if [ "$phone_matching_tag" == "$phone_matching_detour" ]; then
+        jq --arg phone_matching_detour "$phone_matching_detour" '.outbounds |= map(select(.detour != $phone_matching_detour))' "$phone_client_file" > "$temp_json"
+        mv "$temp_json" "$phone_client_file"
+        awk -v phone_matching_detour_tag="$phone_matching_detour_tag" '!/^      "outbounds": \[$/,/^\s*]/{if (!($0 ~ "^ * \"" phone_matching_detour_tag "\"")) print; else next; }' "$phone_client_file" > "$phone_client_file.tmp"
+        mv "$phone_client_file.tmp" "$phone_client_file"
+    fi
+
+    if [ "$win_matching_tag" == "$win_matching_detour" ]; then
+        jq --arg win_matching_detour "$win_matching_detour" '.outbounds |= map(select(.detour != $win_matching_detour))' "$win_client_file" > "$temp_json"
+        mv "$temp_json" "$win_client_file"
+        awk -v win_matching_detour_tag="$win_matching_detour_tag" '!/^      "outbounds": \[$/,/^\s*]/{if (!($0 ~ "^ * \"" win_matching_detour_tag "\"")) print; else next; }' "$win_client_file" > "$win_client_file.tmp"
+        mv "$win_client_file.tmp" "$win_client_file"
+    fi
+
+    awk '{if ($0 ~ /],$/ && p ~ /,$/) sub(/,$/, "", p); if (NR > 1) print p; p = $0;}END{print p;}' "$phone_client_file" > "$phone_client_file.tmp"
+    mv "$phone_client_file.tmp" "$phone_client_file"
+    awk '{if ($0 ~ /],$/ && p ~ /,$/) sub(/,$/, "", p); if (NR > 1) print p; p = $0;}END{print p;}' "$win_client_file" > "$win_client_file.tmp"
+    mv "$win_client_file.tmp" "$win_client_file"
+    rm "$temp_yaml"
+    if ! jq -e 'select(.inbounds[] | .listen == "::")' "$config_file" > /dev/null; then
+        sed -i 's/"rules": \[\]/"rules": [\n    ]/' "$config_file"
+        sed -i 's/^  "inbounds": \[\],/  "inbounds": [\n  ],/' "$config_file"
+        sed -i 's/^      "outbounds": \[\],/      "outbounds": [\n      ],/' "$win_client_file"
+        sed -i 's/^      "outbounds": \[\],/      "outbounds": [\n      ],/' "$phone_client_file"
+    fi
+    systemctl restart sing-box
+    echo "已删除 $selected_type 的配置信息，服务端及客户端配置信息已更新，请下载新的配置文件使用！"
+}
+
 function display_naive_config_info() {
     local config_file="/usr/local/etc/sing-box/config.json"
     local output_file="/usr/local/etc/sing-box/output.txt" 
-    local num_users=${#user_names[@]}     
+    local num_users=${#user_names[@]}
     echo -e "${CYAN}NaiveProxy 节点配置信息：${NC}"  | tee -a "$output_file"
     echo -e "${CYAN}==============================================================================${NC}"  | tee -a "$output_file"
     echo "服务器地址: $domain"  | tee -a "$output_file"
@@ -3536,6 +3699,7 @@ function display_naive_config_info() {
         printf "%-38s %s\n" "$user_name" "$user_password" | tee -a "$output_file"
     done      
     echo -e "${CYAN}==============================================================================${NC}"  | tee -a "$output_file"
+    echo "" >> "$output_file"
     echo "配置信息已保存至 $output_file" 
 }
 
@@ -3560,7 +3724,7 @@ function display_Direct_config() {
         local_ip="$ip_v4"
     elif [[ -n "$ip_v6" ]]; then
         local_ip="$ip_v6"
-    fi  
+    fi
     echo -e "${CYAN}Direct 节点配置信息：${NC}" | tee -a "$output_file"
     echo -e "${CYAN}==============================================================================${NC}"  | tee -a "$output_file"
     echo "中转地址: $local_ip" | tee -a "$output_file"
@@ -3571,7 +3735,8 @@ function display_Direct_config() {
     echo -e "${CYAN}------------------------------------------------------------------------------${NC}"  | tee -a "$output_file"
     echo "目标端口: $override_port" | tee -a "$output_file"
     echo -e "${CYAN}==============================================================================${NC}"  | tee -a "$output_file"
-    echo "配置信息已保存至 $output_file"        
+    echo "" >> "$output_file"
+    echo "配置信息已保存至 $output_file"
 }
 
 function display_juicity_config() {
@@ -3598,7 +3763,8 @@ function display_juicity_config() {
     echo "UUID：$user_uuids         密码：$user_passwords      "  | tee -a "$output_file" 
     echo -e "${CYAN}------------------------------------------------------------------------------${NC}"  | tee -a "$output_file" 
     echo "拥塞控制算法: $congestion_control"  | tee -a "$output_file" 
-    echo -e "${CYAN}==============================================================================${NC}"  | tee -a "$output_file" 
+    echo -e "${CYAN}==============================================================================${NC}"  | tee -a "$output_file"
+    echo "" >> "$output_file"
     echo "配置信息已保存至 $output_file"    
 }
 
@@ -3638,7 +3804,8 @@ function display_tuic_config_info() {
     echo "拥塞控制算法: $congestion_control"  | tee -a "$output_file" 
     echo -e "${CYAN}------------------------------------------------------------------------------${NC}"  | tee -a "$output_file" 
     echo "ALPN: $alpn"  | tee -a "$output_file"     
-    echo -e "${CYAN}==============================================================================${NC}"  | tee -a "$output_file" 
+    echo -e "${CYAN}==============================================================================${NC}"  | tee -a "$output_file"
+    echo "" >> "$output_file"
     echo "配置信息已保存至 $output_file" 
 }
 
@@ -3674,7 +3841,7 @@ function display_Shadowsocks_config_info() {
         local_ip="$ip_v4"
     elif [[ -n "$ip_v6" ]]; then
         local_ip="$ip_v6"
-    fi 
+    fi
     echo -e "${CYAN}Shadowsocks 节点配置信息：${NC}"  | tee -a "$output_file"
     echo -e "${CYAN}==============================================================================${NC}"  | tee -a "$output_file"
     echo "服务器地址: $local_ip"  | tee -a "$output_file"
@@ -3685,6 +3852,7 @@ function display_Shadowsocks_config_info() {
     echo -e "${CYAN}------------------------------------------------------------------------------${NC}"  | tee -a "$output_file"
     echo "密码: $ss_passwords"  | tee -a "$output_file"
     echo -e "${CYAN}==============================================================================${NC}"  | tee -a "$output_file"
+    echo "" >> "$output_file"
     echo "配置信息已保存至 $output_file"  
 }
 
@@ -3718,7 +3886,7 @@ function display_socks_config_info() {
         local_ip="$ip_v4"
     elif [[ -n "$ip_v6" ]]; then
         local_ip="$ip_v6"
-    fi  
+    fi
     echo -e "${CYAN}SOCKS 节点配置信息：${NC}"  | tee -a "$output_file"     
     echo -e "${CYAN}==============================================================================${NC}"  | tee -a "$output_file"  
     echo "服务器地址: $local_ip"  | tee -a "$output_file"
@@ -3733,7 +3901,8 @@ function display_socks_config_info() {
         user_password="${user_passwords[$i]}"
         printf "%-35s %s\n" "$user_name" "$user_password" | tee -a "$output_file"
     done 
-    echo -e "${CYAN}==============================================================================${NC}"  | tee -a "$output_file" 
+    echo -e "${CYAN}==============================================================================${NC}"  | tee -a "$output_file"
+    echo "" >> "$output_file"
     echo "节点配置信息已保存至 $output_file"    
 }
 
@@ -3803,7 +3972,8 @@ function display_Hysteria_config_info() {
     echo -e "${CYAN}------------------------------------------------------------------------------${NC}"  | tee -a "$output_file"
         echo "obfs混淆密码：$obfs_password"  | tee -a "$output_file"
     fi
-    echo -e "${CYAN}==============================================================================${NC}"  | tee -a "$output_file" 
+    echo -e "${CYAN}==============================================================================${NC}"  | tee -a "$output_file"
+    echo "" >> "$output_file"
     echo "配置信息已保存至 $output_file"   
 }
 
@@ -3866,7 +4036,8 @@ function display_Hy2_config_info() {
     echo -e "${CYAN}------------------------------------------------------------------------------${NC}"  | tee -a "$output_file"
         echo "QUIC 流量混淆器密码：$obfs_password"  | tee -a "$output_file"
     fi
-    echo -e "${CYAN}==============================================================================${NC}"  | tee -a "$output_file" 
+    echo -e "${CYAN}==============================================================================${NC}"  | tee -a "$output_file"
+    echo "" >> "$output_file"
     echo "配置信息已保存至 $output_file"       
 }
 
@@ -3958,6 +4129,7 @@ function display_reality_config_info() {
         echo "PublicKey: $public_key" | tee -a "$output_file"
     fi
     echo -e "${CYAN}==============================================================================${NC}"  | tee -a "$output_file"
+    echo "" >> "$output_file"
     echo "配置信息已保存至 $output_file"     
 }
 
@@ -4071,6 +4243,7 @@ function display_vmess_config_info() {
     fi
        
     echo -e "${CYAN}==============================================================================${NC}"  | tee -a "$output_file"
+    echo "" >> "$output_file"
     echo "配置信息已保存至 $output_file"  
 }
 
@@ -4177,6 +4350,7 @@ function display_trojan_config_info() {
         echo "传输协议: tcp"  | tee -a "$output_file"
     fi
     echo -e "${CYAN}==============================================================================${NC}"  | tee -a "$output_file"
+    echo "" >> "$output_file"
     echo "配置信息已保存至 $output_file"
 }
 
@@ -4229,7 +4403,7 @@ function display_shadowtls_config_info() {
         local_ip="$ip_v4"
     elif [[ -n "$ip_v6" ]]; then
         local_ip="$ip_v6"
-    fi   
+    fi
     echo -e "${CYAN}ShadowTLS 节点配置信息：${NC}" | tee -a "$output_file"
     echo -e "${CYAN}==============================================================================${NC}" | tee -a "$output_file"
     echo "服务器地址: $local_ip" | tee -a "$output_file"
@@ -4249,6 +4423,7 @@ function display_shadowtls_config_info() {
     echo -e "${CYAN}------------------------------------------------------------------------------${NC}" | tee -a "$output_file"
     echo "握手服务器地址: $user_input" | tee -a "$output_file"
     echo -e "${CYAN}==============================================================================${NC}" | tee -a "$output_file"
+    echo "" >> "$output_file"
     echo "配置信息已保存至 $output_file"      
 }
 
@@ -4393,6 +4568,7 @@ function Direct_install() {
     set_override_port
     generate_Direct_config
     modify_format_inbounds_and_outbounds
+    modify_route_rules
     check_firewall_configuration 
     systemctl daemon-reload   
     systemctl enable sing-box
@@ -4411,6 +4587,7 @@ function Shadowsocks_install() {
     set_ss_password
     generate_ss_config
     modify_format_inbounds_and_outbounds
+    modify_route_rules
     check_firewall_configuration 
     systemctl daemon-reload   
     systemctl enable sing-box   
@@ -4427,6 +4604,7 @@ function socks_install() {
     log_outbound_config    
     generate_socks_config
     modify_format_inbounds_and_outbounds
+    modify_route_rules
     check_firewall_configuration 
     systemctl daemon-reload   
     systemctl enable sing-box   
@@ -4443,7 +4621,8 @@ function NaiveProxy_install() {
     log_outbound_config        
     generate_naive_config
     add_cron_job
-    modify_format_inbounds_and_outbounds    
+    modify_format_inbounds_and_outbounds  
+    modify_route_rules  
     systemctl daemon-reload
     systemctl enable sing-box
     systemctl start sing-box
@@ -4458,7 +4637,8 @@ function tuic_install() {
     log_outbound_config    
     generate_tuic_config
     add_cron_job
-    modify_format_inbounds_and_outbounds    
+    modify_format_inbounds_and_outbounds
+    modify_route_rules  
     systemctl daemon-reload
     systemctl enable sing-box
     systemctl start sing-box
@@ -4474,7 +4654,8 @@ function Hysteria_install() {
     log_outbound_config    
     generate_Hysteria_config
     add_cron_job
-    modify_format_inbounds_and_outbounds    
+    modify_format_inbounds_and_outbounds
+    modify_route_rules 
     systemctl daemon-reload
     systemctl enable sing-box
     systemctl start sing-box
@@ -4488,7 +4669,8 @@ function shadowtls_install() {
     enable_bbr
     log_outbound_config 
     generate_shadowtls_config
-    modify_format_inbounds_and_outbounds    
+    modify_format_inbounds_and_outbounds
+    modify_route_rules
     check_firewall_configuration      
     systemctl daemon-reload
     systemctl enable sing-box
@@ -4504,7 +4686,8 @@ function reality_install() {
     enable_bbr
     log_outbound_config         
     generate_vless_config 
-    modify_format_inbounds_and_outbounds     
+    modify_format_inbounds_and_outbounds
+    modify_route_rules
     check_firewall_configuration              
     systemctl daemon-reload
     systemctl enable sing-box
@@ -4521,7 +4704,8 @@ function Hysteria2_install() {
     log_outbound_config    
     generate_Hy2_config
     add_cron_job
-    modify_format_inbounds_and_outbounds    
+    modify_format_inbounds_and_outbounds
+    modify_route_rules
     systemctl daemon-reload
     systemctl enable sing-box
     systemctl start sing-box
@@ -4536,7 +4720,8 @@ function trojan_install() {
     log_outbound_config
     generate_trojan_config 
     add_cron_job
-    modify_format_inbounds_and_outbounds                              
+    modify_format_inbounds_and_outbounds
+    modify_route_rules
     systemctl daemon-reload      
     systemctl enable sing-box 
     systemctl start sing-box
@@ -4552,7 +4737,8 @@ function vmess_install() {
     get_local_ip
     generate_vmess_config
     add_cron_job
-    modify_format_inbounds_and_outbounds     
+    modify_format_inbounds_and_outbounds
+    modify_route_rules
     systemctl daemon-reload   
     systemctl enable sing-box
     systemctl start sing-box
@@ -4596,9 +4782,10 @@ function add_cron_job() {
 function main_menu() {
 echo "╔════════════════════════════════════════════════════════════════════════╗"
 echo -e "║ ${CYAN}作者${NC}： Mr. xiao                                                        ║"
+echo -e "║ ${CYAN}博客地址${NC}: https://tinrlin.com                                          ║"
 echo -e "║ ${CYAN}项目地址${NC}: https://github.com/TinrLin                                   ║"
 echo -e "║ ${CYAN}Telegram 群组${NC}: https://t.me/mrxiao758                                  ║"
-echo -e "║ ${CYAN}YouTube频道${NC}: https://youtube.com/@Mr_xiao502                           ║"
+echo -e "║ ${CYAN}YouTube频道${NC}: https://youtube.com/@Mr_xiao502          Version：1.0     ║"
 echo "╠════════════════════════════════════════════════════════════════════════╣"
 echo "║ 请选择要执行的操作：                                                   ║"
 echo -e "║${CYAN} [1]${NC}  SOCKS                         ${CYAN} [2]${NC}   Direct                       ║"
@@ -4610,11 +4797,12 @@ echo -e "║${CYAN} [11]${NC} NaiveProxy                    ${CYAN} [12]${NC}  S
 echo -e "║${CYAN} [13]${NC} WireGuard                     ${CYAN} [14]${NC}  查看节点信息                 ║"
 echo -e "║${CYAN} [15]${NC} 更新内核                      ${CYAN} [16]${NC}  更新脚本                     ║"
 echo -e "║${CYAN} [17]${NC} 更新证书                      ${CYAN} [18]${NC}  重启服务                     ║"
-echo -e "║${CYAN} [19]${NC} 卸载                          ${CYAN} [0]${NC}   退出                         ║"
+echo -e "║${CYAN} [19]${NC} 节点管理                      ${CYAN} [20]${NC}  卸载                         ║"
+echo -e "║${CYAN} [0]${NC}  退出                                                              ║"
 echo "╚════════════════════════════════════════════════════════════════════════╝"
 
     local choice
-    read -p "请选择 [0-19]: " choice
+    read -p "请选择 [0-20]: " choice
 
     case $choice in
         1)
@@ -4688,8 +4876,12 @@ echo "╚═══════════════════════�
         18)
             check_and_restart_services
             exit 0
-            ;;                                    
+            ;;
         19)
+            delete_choice
+            exit 0
+            ;; 
+        20)
             uninstall
             exit 0
             ;;                   
