@@ -7,7 +7,6 @@
 # **说明**
 - **脚本使用sing-box、Juicity内核。**
 - **脚本支持 CentOS 8+、Debian 10+、Ubuntu 20+ 操作系统。**
-- **脚本支持 warp 解锁 ChatGPT、Netflix、Disney+、YouTube。**
 - **脚本所有协议均支持自签证书（NaiveProxy除外）。**
 - **脚本支持多用户。**
 - **脚本支持所有协议共存。**
