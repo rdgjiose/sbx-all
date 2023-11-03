@@ -1,8 +1,14 @@
+# **更新内容**
+- **添加 WireGuard 解锁 YouTube 选项。**
+- **添加节点管理选项，支持删除任意节点的配置，包括服务端与客户端配置文件。**
+- **删除节点配置仅支持Version：1.0及之后的版本。**
+- **其它优化与修复。**
+
 # **说明**
 - **脚本使用sing-box、Juicity内核。**
 - **脚本支持IPV6单栈机。**
 - **脚本支持 CentOS 8+、Debian 10+、Ubuntu 20+ 操作系统。**
-- **脚本支持 warp 解锁 ChatGPT、Netflix、Disney+。**
+- **脚本支持 warp 解锁 ChatGPT、Netflix、Disney+、YouTube。**
 - **脚本所有协议均支持自签证书（NaiveProxy除外）。**
 - **脚本支持多用户。**
 - **脚本支持所有协议共存。**
@@ -159,4 +165,3 @@ service iptables save
 - **VMess+WebSocket+TLS** 
 - **VMess+H2C+TLS**
 - **VMess+gRPC+TLS** 
-
