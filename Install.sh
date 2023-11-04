@@ -1143,6 +1143,7 @@ function apply_certificate() {
     private_key_path="/etc/ssl/private/"$domain".key"
     local has_ipv4=false
     local ca_servers=("letsencrypt" "zerossl")
+    local return_to_menu=false
 
     if [[ -n "$ip_v4" ]]; then
         has_ipv4=true
@@ -1162,9 +1163,16 @@ function apply_certificate() {
             result=$(~/.acme.sh/acme.sh --issue -d "$domain" --standalone -k ec-256 --listen-v6 2>&1)
         fi
 
-        if [[ $result == *"log"* || $result == *"debug"* || $result == *"error"* || $result == *"force"* ]]; then
-            echo -e "${RED}$result ${NC}"
-            return_to_menu=true  
+        if [[ $result == *"force"* ]]; then
+            if $has_ipv4; then
+                result=$(~/.acme.sh/acme.sh --issue -d "$domain" --standalone -k ec-256 --force 2>&1)
+            else
+                result=$(~/.acme.sh/acme.sh --issue -d "$domain" --standalone -k ec-256 --listen-v6 --force 2>&1)
+            fi
+        fi
+
+        if [[ $result == *"log"* || $result == *"debug"* || $result == *"error"* ]]; then
+            echo -e "${RED}$result ${NC}" 
             continue  
         fi
 
