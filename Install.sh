@@ -2710,7 +2710,7 @@ function generate_tuic_phone_client_config() {
 }
 
 function generate_tuic_win_client_config() {
-  local phone_client_file="/usr/local/etc/sing-box/phone_client.json"
+  local win_client_file="/usr/local/etc/sing-box/win_client.json"
   local server_name="$domain"
   local proxy_name
   local server_value
