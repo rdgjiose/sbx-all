@@ -1,7 +1,7 @@
 # **更新内容**
-- **添加 WireGuard 解锁 YouTube 选项。**
-- **添加节点管理选项，支持删除任意节点的配置，包括服务端与客户端配置文件。**
-- **删除节点配置仅支持Version：1.0及之后的版本。**
+- **添加 Multiplex (多路复用)、TCP Brutal (拥塞控制算法)、ECH (TLS 扩展)配置；若要启用TCP Brutal，请在服务端自行安装 TCP Brutal。**
+- **添加对 Juicity 节点链接生成的支持。**
+- **添加对 HTTP 协议的支持。**
 - **其它优化与修复。**
 
 # **说明**
@@ -11,6 +11,7 @@
 - **脚本支持多用户。**
 - **脚本支持所有协议共存。**
 - **脚本支持自动续签证书。**
+- **脚本支持 Multiplex、TCP Brutal、ECH 配置。**
 
 # **安装**
 - **Debian&&Ubuntu使用以下命令安装依赖**
@@ -33,6 +34,7 @@ wget -N -O /root/singbox.sh https://raw.githubusercontent.com/TinrLin/sing-box/m
 
 # **脚本支持的节点类型**
 - **SOCKS**
+- **HTTP**
 - **TUIC V5**
 - **Juicity**
 - **WireGuard--解锁 ChatGPT、Netflix、Disney+**
