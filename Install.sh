@@ -347,7 +347,6 @@ function select_sing_box_install_option() {
         local install_option
         read -p "请选择 [1-2]: " install_option
         install_option="${install_option:-1}"
-
         case $install_option in
             1)
                 install_latest_sing_box
@@ -356,8 +355,7 @@ function select_sing_box_install_option() {
             2)
                 install_Pre_release_sing_box
                 break
-                ;;                
-        
+                ;;
             3)
                 install_go
                 compile_install_sing_box
