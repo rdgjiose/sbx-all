@@ -1,10 +1,15 @@
 # **更新内容**
+- **V 1.1-beta.3**
+- **添加 HTTPUpgrade 传输层。**
+
+<details>
+   <summary><b>历史更新内容</b></summary>
+
 - **V 1.1-beta.2**
 - **修复自动更新证书问题。**
 - **修复Cron检测规则。**
 
-<details>
-   <summary><b>历史更新内容</b></summary>
+<br>
 
 - **V 1.1-beta.1** 
 - **添加 Multiplex (多路复用)、TCP Brutal (拥塞控制算法)、ECH (TLS 扩展)配置；若要启用 Multiplex、TCP Brutal，请使用1.7.0以上的 sing-box 内核，请在服务端自行安装 TCP Brutal。**
@@ -28,7 +33,7 @@
 - **脚本支持多用户。**
 - **脚本支持所有协议共存。**
 - **脚本支持自动续签证书。**
-- **脚本支持 Multiplex、TCP Brutal、ECH 配置。**
+- **脚本支持 Multiplex、TCP Brutal、ECH 配置；若要启用 Multiplex、TCP Brutal，sing-box 内核需 ≥1.7.0，请在服务端自行安装 TCP Brutal。**
 
 # **安装**
 - **Debian&&Ubuntu使用以下命令安装依赖**
