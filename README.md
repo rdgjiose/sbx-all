@@ -32,7 +32,9 @@
 - **脚本所有协议均支持自签证书（NaiveProxy除外）。**
 - **脚本支持多用户。**
 - **脚本支持所有协议共存。**
+- **脚本支持自签100年证书。**
 - **脚本支持自动续签证书。**
+- **脚本支持HTTP、WebSocket、gRPC、HTTPUpgrade传输协议。**
 - **脚本支持 Multiplex、TCP Brutal、ECH 配置；若要启用 Multiplex、TCP Brutal，sing-box 内核需 ≥1.7.0，请在服务端自行安装 TCP Brutal。**
 
 # **安装**
