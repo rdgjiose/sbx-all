@@ -5,7 +5,7 @@
 - **其它优化与修复。**
 
 <details>
- <summary onclick="this.style.fontSize='16px'; this.style.fontWeight='bold';">点击展开折叠</summary>
+ <summary><b>点击展开折叠</b></summary>
   
 - **添加 Multiplex (多路复用)、TCP Brutal (拥塞控制算法)、ECH (TLS 扩展)配置；若要启用 Multiplex、TCP Brutal，请使用1.7.0以上的 sing-box 内核，请在服务端自行安装 TCP Brutal。**
 - **添加对 Juicity 节点链接生成的支持。**
