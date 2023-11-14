@@ -5,7 +5,7 @@
 - **其它优化与修复。**
 
 <details>
-  <summary><b>更新内容</b></summary>
+ <summary><span style="font-size: 24px; font-weight: bold;">更新内容</span></summary>
   
 - **添加 Multiplex (多路复用)、TCP Brutal (拥塞控制算法)、ECH (TLS 扩展)配置；若要启用 Multiplex、TCP Brutal，请使用1.7.0以上的 sing-box 内核，请在服务端自行安装 TCP Brutal。**
 - **添加对 Juicity 节点链接生成的支持。**
