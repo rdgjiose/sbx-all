@@ -64,6 +64,7 @@ wget -N -O /root/singbox.sh https://raw.githubusercontent.com/TinrLin/sing-box/m
 - **VLESS+TCP**
 - **VLESS+WebSocket**
 - **VLESS+gRPC**
+- **VLESS+HTTPUpgrade**
 - **VLESS+Vision+REALITY**
 - **VLESS+H2C+REALITY**
 - **VLESS+gRPC+REALITY**
@@ -71,18 +72,22 @@ wget -N -O /root/singbox.sh https://raw.githubusercontent.com/TinrLin/sing-box/m
 - **Trojan+TCP**
 - **Trojan+WebSocket**
 - **Trojan+gRPC**
+- **Trojan+HTTPUpgrade**
 - **Trojan+TCP+TLS**
 - **Trojan+H2C+TLS**
 - **Trojan+gRPC+TLS**
 - **Trojan+WebSocket+TLS**
+- **Trojan+HTTPUpgrade+TLS**
 - **Hysteria**
 - **ShadowTLS V3**
 - **NaiveProxy**
 - **Shadowsocks**
 - **VMess+TCP**
 - **VMess+WebSocket**
-- **VMess+gRPC**   
+- **VMess+gRPC**
+- **VMess+HTTPUpgrade**   
 - **VMess+TCP+TLS**
 - **VMess+WebSocket+TLS** 
 - **VMess+H2C+TLS**
 - **VMess+gRPC+TLS** 
+- **VMess+HTTPUpgrade+TLS** 
