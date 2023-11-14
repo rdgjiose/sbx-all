@@ -4827,7 +4827,7 @@ echo -e "║ ${CYAN}作者${NC}： Mr. xiao                                     
 echo -e "║ ${CYAN}博客地址${NC}: https://tinrlin.com                                          ║"
 echo -e "║ ${CYAN}项目地址${NC}: https://github.com/TinrLin                                   ║"
 echo -e "║ ${CYAN}Telegram 群组${NC}: https://t.me/mrxiao758                                  ║"
-echo -e "║ ${CYAN}YouTube频道${NC}: https://youtube.com/@Mr_xiao502       Version：1.1-beta.1 ║"
+echo -e "║ ${CYAN}YouTube频道${NC}: https://youtube.com/@Mr_xiao502       Version：1.1-beta.2 ║"
 echo "╠════════════════════════════════════════════════════════════════════════╣"
 echo "║ 请选择要执行的操作：                                                   ║"
 echo -e "║${CYAN} [1]${NC}  SOCKS                             ${CYAN} [2]${NC}   Direct                   ║"
