@@ -1963,8 +1963,6 @@ function generate_reality_config() {
         set_target_server
         generate_private_key
         set_short_ids
-    fi
-    if [[ "$reality_enabled" = true ]]; then
         reality_config=",\n      \"tls\": {\n        \"enabled\": true,\n        \"server_name\": \"$server_name\",\n        \"reality\": {\n          \"enabled\": true,\n          \"handshake\": {\n            \"server\": \"$target_server\",\n            \"server_port\": 443\n          },\n          \"private_key\": \"$private_key\",\n          \"short_id\": [$short_Ids\n          ]\n        }\n      }"
     fi
 }
@@ -4815,8 +4813,11 @@ function Update_Script() {
 }
 
 function add_cron_job() {
-    if ! crontab -l | grep -q "singbox.sh"; then
-        (crontab -l ; echo "0 2 * * 1 /bin/bash /root/singbox.sh >> /usr/local/etc/certificate.log 2>&1") | crontab -
+    if command -v crontab > /dev/null && crontab -l | grep -q "singbox.sh"; then
+        echo "Cron job already exists."
+    else
+        (crontab -l 2>/dev/null ; echo "0 2 * * 1 /bin/bash /root/singbox.sh >> /usr/local/etc/certificate.log 2>&1") | crontab -
+        echo "Cron job added successfully."
     fi
 }
 
@@ -4943,7 +4944,7 @@ echo "╚═══════════════════════�
 
 function run_option() {
     case "$1" in
-        "17")
+        "18")
             Update_certificate
             exit 0 
             ;;
@@ -4953,7 +4954,6 @@ function run_option() {
 if [ $# -eq 0 ]; then
     main_menu
 else
-    
     run_option "$1"
 fi
 
