@@ -1,12 +1,12 @@
 # **更新内容**
-- **添加 Multiplex (多路复用)、TCP Brutal (拥塞控制算法)、ECH (TLS 扩展)配置；若要启用 Multiplex、TCP Brutal，请使用1.7.0以上的 sing-box 内核，请在服务端自行安装 TCP Brutal。**
-- **添加对 Juicity 节点链接生成的支持。**
-- **添加对 HTTP 协议的支持。**
-- **其它优化与修复。**
+- **V 1.1-beta.2**
+- **修复自动更新证书问题**
+- **修复Cron检测规则**
 
 <details>
- <summary><b>点击展开折叠</b></summary>
-  
+   <summary><b>查看历史更新内容</b></summary>
+
+- **V 1.1-beta.1** 
 - **添加 Multiplex (多路复用)、TCP Brutal (拥塞控制算法)、ECH (TLS 扩展)配置；若要启用 Multiplex、TCP Brutal，请使用1.7.0以上的 sing-box 内核，请在服务端自行安装 TCP Brutal。**
 - **添加对 Juicity 节点链接生成的支持。**
 - **添加对 HTTP 协议的支持。**
