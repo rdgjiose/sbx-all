@@ -37,7 +37,6 @@ short_ids=()
 function check_firewall_configuration() {
     local os_name=$(uname -s)
     local firewall
-
     if [[ $os_name == "Linux" ]]; then
         if command -v ufw >/dev/null 2>&1 && ufw status | grep -q "Status: active"; then
             firewall="ufw"
@@ -53,12 +52,10 @@ function check_firewall_configuration() {
             firewall="firewalld"
         fi
     fi
-
     if [[ -z $firewall ]]; then
         echo "No firewall configuration detected or firewall is not enabled, skipping firewall configuration."
         return
     fi
-
     echo "Checking firewall configuration..."
     case $firewall in
         ufw)
@@ -81,7 +78,6 @@ function check_firewall_configuration() {
             if ! ufw status | grep -q " 80" 2>/dev/null; then
                 ufw allow 80 > /dev/null 2>&1
             fi
-
             echo "Firewall configuration has been updated."
             ;;
         iptables | iptables-persistent | iptables-service)
@@ -160,7 +156,6 @@ function check_firewall_configuration() {
             elif [[ -e /etc/sysconfig/ip6tables ]]; then
                 ip6tables-save > /etc/sysconfig/ip6tables
             fi
-
             echo "Firewall configuration has been updated."
             ;;
         firewalld)
@@ -227,9 +222,7 @@ function check_firewall_configuration() {
             if ! firewall-cmd --zone=public --list-ports | grep -q "80/udp" 2>/dev/null; then
                 firewall-cmd --zone=public --add-port=80/udp --permanent > /dev/null 2>&1
             fi
-
             firewall-cmd --reload
-
             echo "Firewall configuration has been updated."
             ;;
     esac
@@ -344,7 +337,6 @@ function select_sing_box_install_option() {
         echo "1). 下载安装 sing-box（Latest 版本）"
         echo "2). 下载安装 sing-box（Beta 版本）"
         echo "3). 编译安装 sing-box（完整功能版本）"
-        local install_option
         read -p "请选择 [1-2]: " install_option
         install_option="${install_option:-1}"
         case $install_option in
@@ -1090,15 +1082,6 @@ function set_private_key_path() {
     done
 }
 
-function modify_route_rules() {
-    local config_file="/usr/local/etc/sing-box/config.json"
-    local temp_config_file="/usr/local/etc/sing-box/temp_config.json"
-    if jq -e '.route.rules[] | select(.geosite != null)' "$config_file" >/dev/null; then
-        jq '(.route.rules |= [.[] | select(.geosite != null)] + [.[] | select(.geosite == null)])' "$config_file" > "$temp_config_file"
-        mv "$temp_config_file" "$config_file"
-    fi
-}
-
 function apply_certificate() {
     certificate_path="/etc/ssl/private/"$domain".crt"
     private_key_path="/etc/ssl/private/"$domain".key"
@@ -1208,7 +1191,6 @@ function Reapply_certificates() {
                 ~/.acme.sh/acme.sh --issue --dns dns_cf -d "$server_name" -k ec-256 --listen-v6 --force
             fi
         )
-        
         if [[ "$result" =~ "Cert success." ]]; then
             echo "Certificate for $server_name has been applied using Cloudflare DNS verification."
         else
@@ -1514,11 +1496,13 @@ function select_vmess_type() {
 1). VMess+TCP
 2). VMess+WebSocket
 3). VMess+gRPC
-4). VMess+TCP+TLS
-5). VMess+WebSocket+TLS
-6). VMess+H2C+TLS
-7). VMess+gRPC+TLS
-请选择 [1-7]: " node_type
+4). VMess+HTTPUpgrade
+5). VMess+TCP+TLS
+6). VMess+WebSocket+TLS
+7). VMess+H2C+TLS
+8). VMess+gRPC+TLS
+9). VMess+HTTPUpgrade+TLS
+请选择 [1-9]: " node_type
         case $node_type in
             "" | 1)
                 tls_enabled=false
@@ -1535,24 +1519,34 @@ function select_vmess_type() {
                 break
                 ;;
             4)
-                tls_enabled=true
+                transport_httpupgrade=true
+                tls_enabled=false
                 break
-                ;; 
+                ;;
             5)
-                transport_ws=true
                 tls_enabled=true
                 break
                 ;; 
             6)
+                transport_ws=true
+                tls_enabled=true
+                break
+                ;; 
+            7)
                 transport_http=true
                 tls_enabled=true
                 break
                 ;;
-            7)
+            8)
                 transport_grpc=true
                 tls_enabled=true
                 break
-                ;;                                                                               
+                ;;
+            9)
+                transport_httpupgrade=true
+                tls_enabled=true
+                break
+                ;;
             *)
                 echo -e "${RED}无效的选择，请重新输入！${NC}"
                 ;;
@@ -1566,40 +1560,43 @@ function select_vless_type() {
 1). VLESS+TCP
 2). VLESS+WebSocket
 3). VLESS+gRPC
-4). VLESS+Vision+REALITY
-5). VLESS+H2C+REALITY
-6). VLESS+gRPC+REALITY
-请选择[1-6]: " flow_option
+4). VLESS+HTTPUpgrade
+5). VLESS+Vision+REALITY
+6). VLESS+H2C+REALITY
+7). VLESS+gRPC+REALITY
+请选择[1-7]: " flow_option
         case $flow_option in
             "" | 1)
                 flow_type=""
-                transport_removed=true
                 break
                 ;;
             2)
                 flow_type=""
                 transport_ws=true
-                transport_removed=false
                 break
                 ;;
             3)
                 flow_type=""
                 transport_grpc=true
-                transport_removed=false
                 break
                 ;;
             4)
+                flow_type=""
+                transport_httpupgrade=true
+                break
+                ;;
+            5)
                 flow_type="xtls-rprx-vision"
                 reality_enabled=true
                 break
                 ;;
-            5)
+            6)
                 flow_type=""
                 transport_http=true
                 reality_enabled=true
                 break
                 ;;
-            6)
+            7)
                 flow_type=""
                 transport_grpc=true
                 reality_enabled=true
@@ -1618,11 +1615,13 @@ function select_trojan_type() {
 1). Trojan+TCP
 2). Trojan+WebSocket
 3). Trojan+gRPC
-4). Trojan+TCP+TLS
-5). Trojan+WebSocket+TLS
-6). Trojan+H2C+TLS
-7). Trojan+gRPC+TLS
-请选择 [1-7]: " setup_type
+4). Trojan+HTTPUpgrade
+5). Trojan+TCP+TLS
+6). Trojan+WebSocket+TLS
+7). Trojan+H2C+TLS
+8). Trojan+gRPC+TLS
+9). Trojan+HTTPUpgrade+TLS
+请选择 [1-9]: " setup_type
         case $setup_type in
             "" | 1)
                 tls_enabled=false
@@ -1639,24 +1638,34 @@ function select_trojan_type() {
                 break
                 ;;
             4)
-                tls_enabled=true
+                transport_httpupgrade=true
+                tls_enabled=false
                 break
-                ;; 
+                ;;
             5)
-                transport_ws=true
                 tls_enabled=true
                 break
-                ;; 
+                ;;
             6)
-                transport_http=true
+                transport_ws=true
                 tls_enabled=true
                 break
                 ;;
             7)
+                transport_http=true
+                tls_enabled=true
+                break
+                ;;
+            8)
                 transport_grpc=true
                 tls_enabled=true
                 break
-                ;;                                                                               
+                ;;
+            9)
+                transport_httpupgrade=true
+                tls_enabled=true
+                break
+                ;;
             *)
                 echo -e "${RED}无效的选择，请重新输入！${NC}"
                 ;;
@@ -1900,6 +1909,12 @@ function generate_transport_config() {
             transport_path="/$transport_path"
         fi
         transport_config="\n      \"transport\": {\n        \"type\": \"ws\",\n        \"path\": \"$transport_path\",\n        \"max_early_data\": 2048,\n        \"early_data_header_name\": \"Sec-WebSocket-Protocol\"\n      },"
+    elif [[ "$transport_httpupgrade" = true ]]; then
+        transport_path=${transport_path_input:-/$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 8)}
+        if [[ ! "$transport_path" =~ ^/ ]]; then
+            transport_path="/$transport_path"
+        fi
+        transport_config="\n      \"transport\": {\n        \"type\": \"httpupgrade\",\n        \"path\": \"$transport_path\"\n      },"
     elif [[ "$transport_grpc" = true ]]; then
         service_name=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 8)
         transport_config="\n      \"transport\": {\n        \"type\": \"grpc\",\n        \"service_name\": \"$service_name\"\n      },"
@@ -2058,6 +2073,15 @@ function validate_tls_info() {
     done
 }
 
+function modify_route_rules() {
+    local config_file="/usr/local/etc/sing-box/config.json"
+    local temp_config_file="/usr/local/etc/sing-box/temp_config.json"
+    if jq -e '.route.rules[] | select(.geosite != null)' "$config_file" >/dev/null; then
+        jq '(.route.rules |= [.[] | select(.geosite != null)] + [.[] | select(.geosite == null)])' "$config_file" > "$temp_config_file"
+        mv "$temp_config_file" "$config_file"
+    fi
+}
+
 function extract_variables_and_cleanup() {
     server=$(jq -r '.server' "$temp_file")
     server_port=$(jq -r '.server_port' "$temp_file")
@@ -2072,11 +2096,12 @@ function extract_variables_and_cleanup() {
 
 function log_outbound_config() {
   local config_file="/usr/local/etc/sing-box/config.json"
-  if ! grep -q '"log": {' "$config_file" || ! grep -q '"route": {' "$config_file"  || ! grep -q '"inbounds": \[' "$config_file" || ! grep -q '"outbounds": \[' "$config_file"; then
-    echo -e '{\n  "log": {\n  },\n  "route": {\n  },\n  "inbounds": [\n  ],\n  "outbounds": [\n  ]\n}' > "$config_file"
+  if ! grep -q '"log": {' "$config_file" || ! grep -q '"route": {' "$config_file"  || ! grep -q '"inbounds": \[' "$config_file" || ! grep -q '"outbounds": \[' "$config_file" || ! grep -q '"ntp": {' "$config_file"; then
+    echo -e '{\n  "log": {\n  },\n  "route": {\n  },\n  "inbounds": [\n  ],\n  "outbounds": [\n  ],\n  "ntp": {\n  }\n}' > "$config_file"
     sed -i '/"log": {/!b;n;c\    "disabled": false,\n    "level": "info",\n    "timestamp": true\n  },' "$config_file"
     sed -i '/"route": {/!b;n;c\    "rules": [\n    ]\n  },' "$config_file"
-    sed -i '/"outbounds": \[/!b;n;c\    {\n      "type": "direct",\n      "tag": "direct"\n    }\n  ]' "$config_file"
+    sed -i '/"outbounds": \[/!b;n;c\    {\n      "type": "direct",\n      "tag": "direct"\n    }\n  ],' "$config_file"
+    sed -i '/"ntp": {/!b;n;c\    "enabled": true,\n    "server": "time.apple.com",\n    "server_port": 123,\n    "interval": "30m",\n    "detour": "direct"\n  }' "$config_file"
   fi
 }
 
@@ -4125,6 +4150,8 @@ function display_reality_config_info() {
         echo "传输协议: $transport_type"  | tee -a "$output_file"
         if [ "$transport_type" == "ws" ]; then
             echo "路径: $transport_path"  | tee -a "$output_file"
+        elif [ "$transport_type" == "httpupgrade" ]; then
+            echo "路径: $transport_path"  | tee -a "$output_file"
         elif [ "$transport_type" == "grpc" ]; then
             echo "grpc-service-name: $transport_service_name"  | tee -a "$output_file"
         fi
@@ -4176,22 +4203,25 @@ function display_reality_config_files() {
         local user_uuid="${user_uuids[$i]}"
         write_phone_client_file
         write_win_client_file
-        if [ "$server_name" == "null" ] && [ "$transport_type" == "null" ]; then
+        if [[ "$server_name" == "null" ]] && [[ "$transport_type" == "null" ]]; then
             ensure_clash_yaml
             write_clash_yaml
             generate_vless_tcp_yaml
             generate_vless_win_client_config
             generate_vless_phone_client_config
-        elif [ "$server_name" == "null" ] && [ "$transport_type" == "ws" ]; then
+        elif [[ "$server_name" == "null" ]] && [[ "$transport_type" == "ws" ]]; then
             ensure_clash_yaml
             write_clash_yaml
             generate_vless_ws_yaml
             generate_vless_win_client_config
             generate_vless_phone_client_config
-        elif [ "$server_name" == "null" ] && [ "$transport_type" == "grpc" ]; then
+        elif [[ "$server_name" == "null" ]] && [[ "$transport_type" == "grpc" ]]; then
             ensure_clash_yaml
             write_clash_yaml
             generate_vless_grpc_yaml
+            generate_vless_win_client_config
+            generate_vless_phone_client_config
+        elif [[ "$server_name" == "null" ]] && [[ "$transport_type" == "httpupgrade" ]]; then
             generate_vless_win_client_config
             generate_vless_phone_client_config
         fi
@@ -4199,16 +4229,16 @@ function display_reality_config_files() {
             local short_id="${short_ids[$j]}" 
             write_phone_client_file
             write_win_client_file
-            if [ -n "$server_name" ] && [ "$server_name" != "null" ] && [ "$transport_type" == "null" ]; then
+            if [[ -n "$server_name" ]] && [[ "$server_name" != "null" ]] && [[ "$transport_type" == "null" ]]; then
                 ensure_clash_yaml
                 write_clash_yaml
                 generate_vless_reality_vision_yaml
                 generate_vless_win_client_config
                 generate_vless_phone_client_config
-            elif [ -n "$server_name" ] && [ "$server_name" != "null" ] && [ "$transport_type" == "http" ]; then
+            elif [[ -n "$server_name" ]] && [[ "$server_name" != "null" ]] && [[ "$transport_type" == "http" ]]; then
                 generate_vless_win_client_config
                 generate_vless_phone_client_config
-            elif [ -n "$server_name" ] && [ "$server_name" != "null" ] && [ "$transport_type" == "grpc" ]; then
+            elif [[ -n "$server_name" ]] && [[ "$server_name" != "null" ]] && [[ "$transport_type" == "grpc" ]]; then
                 ensure_clash_yaml
                 write_clash_yaml
                 generate_vless_reality_grpc_yaml
@@ -4217,7 +4247,7 @@ function display_reality_config_files() {
             fi
         done
     done
-    if [ "$transport_type" != "http" ]; then
+    if [[ "$transport_type" != "http" && "$transport_type" != "httpupgrade" ]]; then
         echo "Clash配置文件已保存至 $clash_file，请下载使用！"
     fi    
     echo "手机端配置文件已保存至$phone_client_file，请下载后使用！"
@@ -4259,6 +4289,8 @@ function display_vmess_config_info() {
     if [ "$transport_type" != "null" ]; then
         echo "传输协议: $transport_type"  | tee -a "$output_file"
         if [ "$transport_type" == "ws" ]; then
+            echo "路径: $transport_path"  | tee -a "$output_file"
+        elif [ "$transport_type" == "httpupgrade" ]; then
             echo "路径: $transport_path"  | tee -a "$output_file"
         elif [ "$transport_type" == "grpc" ]; then
             echo "grpc-service-name: $transport_service_name"  | tee -a "$output_file"
@@ -4319,7 +4351,7 @@ function display_vmess_config_files() {
             show_clash_message=false
         fi               
     done
-    if [ "$transport_type" == "http" ] || [ "$enable_ech" = true ]; then
+    if [ "$transport_type" == "http" ] || [ "$transport_type" == "httpupgrade" ] || [ "$enable_ech" = true ]; then
         echo "手机端配置文件已保存至$phone_client_file，请下载后使用！"
         echo "电脑端配置文件已保存至$win_client_file，请下载后使用！"
     else
@@ -4365,6 +4397,8 @@ function display_trojan_config_info() {
         echo "传输协议: $transport_type"  | tee -a "$output_file"
         if [ "$transport_type" == "ws" ]; then
             echo "路径: $transport_path"  | tee -a "$output_file"
+        elif [ "$transport_type" == "httpupgrade" ]; then
+            echo "路径: $transport_path"  | tee -a "$output_file"
         elif [ "$transport_type" == "grpc" ]; then
             echo "grpc-service-name: $transport_service_name"  | tee -a "$output_file"
         fi
@@ -4409,7 +4443,7 @@ function display_trojan_config_files() {
             generate_trojan_grpc_tls_yaml
         fi       
     done
-    if [[ "$enable_ech" != true ]] && [[ -n "$domain" || -n "$domain_name" ]] && [ "$transport_type" != "http" ]; then
+    if [[ "$enable_ech" != true ]] && [[ -n "$domain" || -n "$domain_name" ]] && [[ "$transport_type" != "http" || "$transport_type" != "httpupgrade" ]]; then
         echo "Clash配置文件已保存至 $clash_file，请下载使用！"
     fi    
     echo "手机端配置文件已保存至$phone_client_file，请下载后使用！"
@@ -4553,6 +4587,20 @@ function check_wireguard_config() {
     if grep -q "wireguard" "$config_file"; then
         echo -e "${RED}Warp 已安装，请勿重复安装！${NC}"
         exit 1
+    fi
+}
+
+function Update_Script() {
+    wget -O /root/singbox.sh https://raw.githubusercontent.com/TinrLin/script_installation/main/Install.sh
+    chmod +x /root/singbox.sh 
+}
+
+function add_cron_job() {
+    if command -v crontab > /dev/null && crontab -l | grep -q "singbox.sh"; then
+        echo "Cron job already exists."
+    else
+        (crontab -l 2>/dev/null ; echo "0 2 * * 1 /bin/bash /root/singbox.sh >> /usr/local/etc/certificate.log 2>&1") | crontab -
+        echo "Cron job added successfully."
     fi
 }
 
@@ -4796,20 +4844,6 @@ function Update_certificate() {
     validate_tls_info
     Reapply_certificates
 } 
-
-function Update_Script() {
-    wget -O /root/singbox.sh https://raw.githubusercontent.com/TinrLin/script_installation/main/Install.sh
-    chmod +x /root/singbox.sh 
-}
-
-function add_cron_job() {
-    if command -v crontab > /dev/null && crontab -l | grep -q "singbox.sh"; then
-        echo "Cron job already exists."
-    else
-        (crontab -l 2>/dev/null ; echo "0 2 * * 1 /bin/bash /root/singbox.sh >> /usr/local/etc/certificate.log 2>&1") | crontab -
-        echo "Cron job added successfully."
-    fi
-}
 
 function main_menu() {
 echo "╔════════════════════════════════════════════════════════════════════════╗"
