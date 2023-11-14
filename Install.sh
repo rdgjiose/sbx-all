@@ -619,29 +619,19 @@ WantedBy=multi-user.target'
 }
 
 function set_listen_port() {
-    local sing_box_config_file="/usr/local/etc/sing-box/config.json"
-    local juicity_config_file="/usr/local/etc/juicity/config.json"
-    current_listen_ports=()
-    if [ -f "$sing_box_config_file" ]; then
-        current_listen_ports+=($(jq -r '.inbounds[] | select(.listen_port != null) | .listen_port' "$sing_box_config_file"))
-    fi
-    if [ -f "$juicity_config_file" ]; then
-        current_listen_ports+=($(jq -r '.listen' "$juicity_config_file" | tr -d ':'))
-    fi
     while true; do
         read -p "请输入监听端口 (默认443): " new_listen_port
         new_listen_port=${new_listen_port:-443}
         if [[ $new_listen_port =~ ^[1-9][0-9]{0,4}$ && $new_listen_port -le 65535 ]]; then
-            for port in "${current_listen_ports[@]}"; do
-                if [ "$new_listen_port" == "$port" ]; then
-                    echo -e "${RED}错误：端口 $new_listen_port 已经使用，请重新输入！${NC}" >&2
-                    continue 2
-                fi
-            done
-            echo "监听端口：$new_listen_port"
-            break
+            check_result=$(netstat -tulpn | grep -E "\b${new_listen_port}\b")
+            if [ -z "$check_result" ]; then
+                echo "监听端口：$new_listen_port"
+                break
+            else
+                echo -e "${RED}错误：端口已被占用，请选择其他端口！${NC}" >&2
+            fi
         else
-            echo -e "${RED}错误：端口范围 1-65535，请重新输入！${NC}" >&2
+            echo -e "${RED}错误：端口范围1-65535，请重新输入！${NC}" >&2
         fi
     done
     listen_port="$new_listen_port"
