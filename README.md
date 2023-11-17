@@ -1,9 +1,14 @@
 # **更新内容**
-- **V 1.1-beta.3**
-- **添加 HTTPUpgrade 传输层。**
+- **V 1.1**
+- **修改客户端配置文件DNS配置部分。**
 
 <details>
    <summary><b>历史更新内容</b></summary>
+
+- **V 1.1-beta.3**
+- **添加 HTTPUpgrade 传输层。**
+
+<br>
 
 - **V 1.1-beta.2**
 - **修复自动更新证书问题。**
