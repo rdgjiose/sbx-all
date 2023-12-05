@@ -1,9 +1,15 @@
 # **更新内容**
-- **V 1.1**
-- **修改客户端配置文件DNS配置部分。**
+- **V 1.2**
+- **客户端配置文件添加Clash API支持。**
+- **其它优化与修复。**
 
 <details>
    <summary><b>历史更新内容</b></summary>
+
+- **V 1.1**
+- **修改客户端配置文件DNS配置部分。**
+
+<br>
 
 - **V 1.1-beta.3**
 - **添加 HTTPUpgrade 传输层。**
@@ -41,6 +47,7 @@
 - **脚本支持自动续签证书。**
 - **脚本支持HTTP、WebSocket、gRPC、HTTPUpgrade传输协议。**
 - **脚本支持 Multiplex、TCP Brutal、ECH 配置；若要启用 Multiplex、TCP Brutal，sing-box 内核需 ≥1.7.0，请在服务端自行安装 TCP Brutal。**
+- **由于 Clash 不支持 TCP Brutal、ECH 配置，如果启用这些配置将不会自动生成 Clash 配置文件。**
 
 # **安装**
 - **Debian&&Ubuntu使用以下命令安装依赖**
